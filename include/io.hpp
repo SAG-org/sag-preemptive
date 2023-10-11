@@ -97,7 +97,7 @@ namespace NP {
 		return edges;
 	}
 
-	template<class Time> Job<Time> parse_job(std::istream& in)
+	template<class Time> Job<Time> parse_job(std::istream& in, bool want_worst_case = false)
 	{
 		unsigned long tid, jid;
 
@@ -123,14 +123,22 @@ namespace NP {
 		next_field(in);
 		in >> prio;
 
+		if (want_worst_case) {
+//            arr_max = arr_min;
+			cost_min = cost_max;
+		}
+
 		in.exceptions(state_before);
+
+//		std::cout << "tid: " << tid << " jid: " << jid << " arr_min: " << arr_min << " arr_max: " << arr_max << " cost_min: " << cost_min << " cost_max: " << cost_max << " dl: " << dl << " prio: " << prio << std::endl;
+
 
 		return Job<Time>{jid, Interval<Time>{arr_min, arr_max},
 						 Interval<Time>{cost_min, cost_max}, dl, prio, tid};
 	}
 
 	template<class Time>
-	typename Job<Time>::Job_set parse_file(std::istream& in)
+	typename Job<Time>::Job_set parse_file(std::istream& in, bool want_worst_case = false)
 	{
 		// first row contains a comment, just skip it
 		next_line(in);
@@ -138,7 +146,7 @@ namespace NP {
 		typename Job<Time>::Job_set jobs;
 
 		while (more_data(in)) {
-			jobs.push_back(parse_job<Time>(in));
+			jobs.push_back(parse_job<Time>(in, want_worst_case));
 			// munge any trailing whitespace or extra columns
 			next_line(in);
 		}
@@ -171,8 +179,8 @@ namespace NP {
 		in.exceptions(state_before);
 
 		return Abort_action<Time>{JobID{jid, tid},
-		                          Interval<Time>{trig_min, trig_max},
-		                          Interval<Time>{cleanup_min, cleanup_max}};
+								  Interval<Time>{trig_min, trig_max},
+								  Interval<Time>{cleanup_min, cleanup_max}};
 	}
 
 

@@ -50,6 +50,7 @@ static unsigned int max_depth = 0;
 static bool want_rta_file;
 
 static bool continue_after_dl_miss = false;
+static bool want_worst_case = false;
 
 #ifdef CONFIG_PARALLEL
 static unsigned int num_worker_threads = 0;
@@ -77,7 +78,7 @@ static Analysis_result analyze(
 
 	// Parse input files and create NP scheduling problem description
 	NP::Scheduling_problem<Time> problem{
-		NP::parse_file<Time>(in),
+		NP::parse_file<Time>(in, want_worst_case),
 		NP::parse_dag_file(dag_in),
 		NP::parse_abort_file<Time>(aborts_in),
 		num_processors};
@@ -335,6 +336,12 @@ int main(int argc, char** argv)
 	      .help("do not abort the analysis on the first deadline miss "
 	            "(default: off)");
 
+	parser.add_option("-w", "--worst")
+			.dest("want_worst_case").set_default("0")
+			.action("store_const").set_const("1")
+			.help("just consider the worst case scenario "
+				  "(default: off)");
+
 
 	auto options = parser.parse_args(argc, argv);
 
@@ -384,6 +391,7 @@ int main(int argc, char** argv)
 	want_rta_file = options.get("rta");
 
 	continue_after_dl_miss = options.get("go_on_after_dl");
+	want_worst_case = options.get("want_worst_case");
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 	want_dot_graph = options.get("dot");

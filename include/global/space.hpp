@@ -410,11 +410,11 @@ namespace NP {
 
 				// make sure we didn't screw up...
 				auto njobs = s->number_of_scheduled_jobs();
-				assert (
-					(!njobs && num_states == 0) // initial state
-				    || (njobs == current_job_count + 1) // normal State
-				    || (njobs == current_job_count + 2 && aborted) // deadline miss
-				);
+//				assert (
+//					(!njobs && num_states == 0) // initial state
+////				    || (njobs == current_job_count + 1) // normal State
+//				    || (njobs == current_job_count + 2 && aborted) // deadline miss
+//				);
 
 				return s;
 			}
@@ -535,7 +535,7 @@ namespace NP {
 
 			bool ready(const State& s, const Job<Time>& j) const
 			{
-				return unfinished(s, j) && s.job_ready(predecessors_of(j));
+				return unfinished(s, j) && s.job_ready(predecessors_of(j)) && !s.job_preempted(index_of(j));
 			}
 
 			bool all_jobs_scheduled(const State& s) const
@@ -551,6 +551,13 @@ namespace NP {
 					Interval<Time> ft{0, 0};
 					if (!s.get_finish_times(pred, ft))
 						ft = get_finish_times(jobs[pred]);
+					r.lower_bound(ft.min());
+					r.extend_to(ft.max());
+				}
+				if(s.job_preempted(index_of(j))) {
+					Interval<Time> ft{0, 0};
+					if (!s.get_finish_times(index_of(j), ft))
+						ft = get_finish_times(j);
 					r.lower_bound(ft.min());
 					r.extend_to(ft.max());
 				}
@@ -570,6 +577,13 @@ namespace NP {
 					Interval<Time> ft{0, 0};
 					if (!s.get_finish_times(pred, ft))
 						ft = get_finish_times(jobs[pred]);
+					r.lower_bound(ft.min());
+					r.extend_to(ft.max());
+				}
+				if(s.job_preempted(index_of(j))) {
+					Interval<Time> ft{0, 0};
+					if (!s.get_finish_times(index_of(j), ft))
+						ft = get_finish_times(j);
 					r.lower_bound(ft.min());
 					r.extend_to(ft.max());
 				}
@@ -611,6 +625,21 @@ namespace NP {
 						when = std::min(when,
 							latest_ready_time(s, ready_min, j, reference_job));
 					}
+
+				// let's look at the higher priority preempted jobs
+				auto preempted_jobs = s.get_preempted_jobs();
+				for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
+					const Job<Time>& j = jobs[it->first];
+					if(j.is(reference_job.get_id()))
+						continue;
+					if (j.higher_priority_than(reference_job)) {
+						Interval<Time> ft{0, 0};
+						if (!s.get_finish_times(index_of(j), ft))
+							ft = get_finish_times(j);
+						DM("HP -> " << j << " " << ft << std::endl);
+						when = std::min(when, ft.max());
+					}
+				}
 
 				// No point looking in the future when we've already
 				// found one in the present.
@@ -674,6 +703,41 @@ namespace NP {
 				return when;
 			}
 
+            // find the next lower or upper bound that a higher priority job after time t can possibly release
+			Time possible_preemption(Time t, const State &s, const Job<Time> &j) const {
+				Time possible_preemption = Time_model::constants<Time>::infinity();
+				// first we check lower bounds
+				for (auto it = jobs_by_earliest_arrival.lower_bound(t + 1);
+					 it != jobs_by_earliest_arrival.upper_bound(t + 1 + j.get_cost().upto()); it++) {
+					const Job<Time> &j_lp = *(it->second);
+					// continue if it is already scheduled
+					if (!s.job_incomplete(index_of(j_lp)))
+						continue;
+					// continue if it is already preempted
+					if (s.job_preempted(index_of(j_lp)))
+						continue;
+					if (j_lp.higher_priority_than(j)) {
+						possible_preemption = std::min(possible_preemption, j_lp.earliest_arrival());
+					}
+				}
+				// then we check upper bounds
+				for (auto it = jobs_by_latest_arrival.lower_bound(t + 1);
+					 it != jobs_by_latest_arrival.upper_bound(t + 1 + j.get_cost().upto()); it++) {
+					const Job<Time> &j_hp = *(it->second);
+					// continue if it is already scheduled
+					if (!s.job_incomplete(index_of(j_hp)))
+						continue;
+					// continue if it is already preempted
+					if (s.job_preempted(index_of(j_hp)))
+						continue;
+					if (j_hp.higher_priority_than(j)) {
+						possible_preemption = std::min(possible_preemption, j_hp.latest_arrival());
+					}
+				}
+
+				return possible_preemption;
+			}
+
 			// assumes j is ready
 			// NOTE: we don't use Interval<Time> here because the
 			//       Interval c'tor sorts its arguments.
@@ -687,9 +751,14 @@ namespace NP {
 				DM("rt: " << rt << std::endl
 				<< "at: " << at << std::endl);
 
+                auto t_preempt = possible_preemption(est, s, j);
+                DM("t_preempt: " << t_preempt << std::endl);
+
 				auto t_high = next_higher_prio_job_ready(s, j, at.min());
+				DM("t_high: " << t_high << std::endl);
 				Time lst    = std::min(t_wc,
 					t_high - Time_model::constants<Time>::epsilon());
+                lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
 
 				DM("est: " << est << std::endl);
 				DM("lst: " << lst << std::endl);
@@ -709,24 +778,62 @@ namespace NP {
 				// yep, job j is a feasible successor in state s
 
 				// compute range of possible finish times
-				Interval<Time> ftimes = st + j.get_cost();
+                Interval<Time> ftimes(0, 0);
+                if(s.job_preempted(index_of(j))){
+                    // it is preempted in the past, so we have to consider the remaining cost
+                    auto remaining_cost = s.get_remaining_time(index_of(j));
+                    ftimes = st + remaining_cost;
+                }else {
+                    ftimes = st + j.get_cost();
+                }
 
-				// update finish-time estimates
-				update_finish_times(j, ftimes);
+                auto t_preempt = possible_preemption(st.min(), s, j);
 
-				// expand the graph, merging if possible
-				const State& next = be_naive ?
-					new_state(s, index_of(j), predecessors_of(j),
-					          st, ftimes, j.get_key()) :
-					new_or_merged_state(s, index_of(j), predecessors_of(j),
-					                    st, ftimes, j.get_key());
+                Interval<Time> remaining(0, 0);
+                if (t_preempt < ftimes.from()) {
+					DM("Dispatching segment: " << j << std::endl);
+					remaining = {ftimes.from() - t_preempt, ftimes.upto() - t_preempt};
+				}else {
+					// dispatching the whole job
+					DM("Dispatching: " << j << std::endl);
+				}
 
-				// make sure we didn't skip any jobs
-				check_for_deadline_misses(s, next);
+                // if we have a leftover, the job is preempted, and we dispatch the first segment
+                if (remaining.from() > 0) {
+                    // update finish-time
+                    ftimes = {t_preempt, t_preempt};
+					update_finish_times(j, ftimes);
 
+                    // expand the graph, merging if possible
+                    const State& next = be_naive ?
+                                        new_state(s, index_of(j), predecessors_of(j),
+                                                  st, ftimes, remaining) :
+                                        new_or_merged_state(s, index_of(j), predecessors_of(j),
+                                                            st, ftimes, remaining);
+                    // make sure we didn't skip any jobs
+                    check_for_deadline_misses(s, next);
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
-				edges.emplace_back(&j, &s, &next, ftimes);
+                    edges.emplace_back(&j, &s, &next, ftimes);
 #endif
+                } else {
+                    // update finish-time estimates
+                    update_finish_times(j, ftimes);
+
+                    // expand the graph, merging if possible
+                    const State &next = be_naive ?
+                                        new_state(s, index_of(j), predecessors_of(j),
+                                                  st, ftimes, j.get_key()) :
+                                        new_or_merged_state(s, index_of(j), predecessors_of(j),
+                                                            st, ftimes, j.get_key());
+                    // make sure we didn't skip any jobs
+                    check_for_deadline_misses(s, next);
+#ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
+                    edges.emplace_back(&j, &s, &next, ftimes);
+#endif
+                }
+
+
+
 				count_edge();
 
 				return true;
@@ -748,9 +855,25 @@ namespace NP {
 				auto t_core = s.core_availability().max();
 				// latest time by which a work-conserving scheduler
 				// certainly schedules some job
-				auto t_wc   = std::max(t_core, t_job);
+                Time t_wc;
+                if (s.has_preempted_jobs()) {
+					t_wc = std::max(t_core, t_job);
+					// check the first time that the previous segments of a preempted job is completed
+					Time min_finish_time = Time_model::constants<Time>::infinity();
+					auto preempted_jobs = s.get_preempted_jobs();
+					for (const auto& j : preempted_jobs) {
+						Interval<Time> ft{0, 0};
+						if (!s.get_finish_times(j.first, ft))
+							ft = get_finish_times(jobs[j.first]);
+						min_finish_time = std::min(min_finish_time, ft.max());
+					}
+					min_finish_time = std::max(min_finish_time, t_core);
+					t_wc = std::min(t_wc, min_finish_time);
+				}
+                else
+				    t_wc = std::max(t_core, t_job);
 
-				DM(s << std::endl);
+				DM("Checking state: " << s << std::endl);
 				DM("t_min: " << t_min << std::endl
 				<< "t_job: " << t_job << std::endl
 				<< "t_core: " << t_core << std::endl
@@ -759,8 +882,8 @@ namespace NP {
 				DM("==== [1] ====" << std::endl);
 				// (1) first check jobs that may be already pending
 				for (const Job<Time>& j : jobs_by_win.lookup(t_min))
-					if (j.earliest_arrival() <= t_min && ready(s, j))
-						found_one |= dispatch(s, j, t_wc);
+					if (j.earliest_arrival() <= t_min && ready(s, j) && !s.job_preempted(index_of(j)))
+                        found_one |= dispatch(s, j, t_wc);
 
 				DM("==== [2] ====" << std::endl);
 				// (2) check jobs that are released only later in the interval
@@ -777,12 +900,23 @@ namespace NP {
 					if (!ready(s, j))
 						continue;
 
+                    // if job is previously preempted, we skip it here and we check it later
+                    if (s.job_preempted(index_of(j)))
+                        continue;
+
 					// Since this job is released in the future, it better
 					// be incomplete...
 					assert(unfinished(s, j));
 
 					found_one |= dispatch(s, j, t_wc);
 				}
+
+                DM("==== [3] ====" << std::endl);
+                // (3) check jobs that are preempted (these jobs are assumed to be certainly released in the past)
+                auto preempted_jobs = s.get_preempted_jobs();
+                for (const auto& rj : preempted_jobs) {
+                    found_one |= dispatch(s,  jobs[rj.first], t_wc);
+                }
 
 				// check for a dead end
 				if (!found_one && !all_jobs_scheduled(s))
@@ -855,7 +989,12 @@ namespace NP {
 					if (!be_naive)
 						states_by_key.clear();
 
-					current_job_count++;
+                    // update current completely scheduled jobs based on the minimum completed jobs in the states
+                    auto min_completed_jobs = std::numeric_limits<unsigned int>::max();
+                    for (const State& s : exploration_front) {
+                        min_completed_jobs = std::min(min_completed_jobs, s.number_of_scheduled_jobs());
+                    }
+					current_job_count = min_completed_jobs;
 
 #ifdef CONFIG_PARALLEL
 					// propagate any updates to the response-time estimates
