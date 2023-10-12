@@ -131,13 +131,17 @@ namespace NP {
 				const State* source;
 				const State* target;
 				const Interval<Time> finish_range;
+				const Interval<Time> start_range;
+				const bool segment;
 
-				Edge(const Job<Time>* s, const State* src, const State* tgt,
-				     const Interval<Time>& fr)
+				Edge(const Job<Time>* s, const State* src, const State* tgt, const Interval<Time>& sr,
+				     const Interval<Time>& fr, const bool seg = false)
 				: scheduled(s)
 				, source(src)
 				, target(tgt)
 				, finish_range(fr)
+				, start_range(sr)
+				, segment(seg)
 				{
 				}
 
@@ -158,12 +162,18 @@ namespace NP {
 
 				Time earliest_start_time() const
 				{
-					return finish_range.from() - scheduled->least_cost();
+//					return finish_range.from() - scheduled->least_cost();
+					return start_range.from();
 				}
 
 				Time latest_start_time() const
 				{
-					return finish_range.upto() - scheduled->maximal_cost();
+					return start_range.upto();
+				}
+
+				bool is_segment() const
+				{
+					return segment;
 				}
 
 			};
@@ -324,8 +334,10 @@ namespace NP {
 				Response_times& r, const Job<Time>& j, Interval<Time> range)
 			{
 				update_finish_times(r, j.get_id(), range);
-				if (j.exceeds_deadline(range.upto()))
+				if (j.exceeds_deadline(range.upto())) {
+					DM("*** Deadline miss: " << j << std::endl);
 					aborted = true;
+				}
 			}
 
 			void update_finish_times(const Job<Time>& j, Interval<Time> range)
@@ -369,13 +381,14 @@ namespace NP {
 							aborted = true;
 							// create a dummy state for explanation purposes
 							auto frange = new_s.core_availability() + j.get_cost();
+							auto srange = frange - j.get_cost();
 							const State& next =
 								new_state(new_s, index_of(j), predecessors_of(j),
 								          frange, frange, j.get_key());
 							// update response times
 							update_finish_times(j, frange);
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
-							edges.emplace_back(&j, &new_s, &next, frange);
+							edges.emplace_back(&j, &new_s, &next, srange, frange);
 #endif
 							count_edge();
 							break;
@@ -782,26 +795,33 @@ namespace NP {
                 if(s.job_preempted(index_of(j))){
                     // it is preempted in the past, so we have to consider the remaining cost
                     auto remaining_cost = s.get_remaining_time(index_of(j));
+					DM("Current remaining time: " << remaining_cost << std::endl);
                     ftimes = st + remaining_cost;
                 }else {
                     ftimes = st + j.get_cost();
                 }
 
+				DM("Assumed finish time: " << ftimes << std::endl);
+
                 auto t_preempt = possible_preemption(st.min(), s, j);
 
                 Interval<Time> remaining(0, 0);
                 if (t_preempt < ftimes.from()) {
-					DM("Dispatching segment: " << j << std::endl);
+					DM("[1] Dispatching segment: " << j << std::endl);
 					remaining = {ftimes.from() - t_preempt, ftimes.upto() - t_preempt};
-				}else {
+					ftimes = {t_preempt, t_preempt};
+				}else if (ftimes.from() < t_preempt && t_preempt < ftimes.until()) {
+					DM("[2] Dispatching segment: " << j << std::endl);
+					remaining = {0, ftimes.upto() - t_preempt};
+					ftimes = {ftimes.from(), t_preempt};
+				} else {
 					// dispatching the whole job
-					DM("Dispatching: " << j << std::endl);
+					DM("[3] Dispatching: " << j << std::endl);
 				}
 
                 // if we have a leftover, the job is preempted, and we dispatch the first segment
-                if (remaining.from() > 0) {
+                if (remaining.until() > 0) {
                     // update finish-time
-                    ftimes = {t_preempt, t_preempt};
 					update_finish_times(j, ftimes);
 
                     // expand the graph, merging if possible
@@ -811,9 +831,9 @@ namespace NP {
                                         new_or_merged_state(s, index_of(j), predecessors_of(j),
                                                             st, ftimes, remaining);
                     // make sure we didn't skip any jobs
-                    check_for_deadline_misses(s, next);
+//                    check_for_deadline_misses(s, next);
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
-                    edges.emplace_back(&j, &s, &next, ftimes);
+                    edges.emplace_back(&j, &s, &next,st , ftimes, true);
 #endif
                 } else {
                     // update finish-time estimates
@@ -826,9 +846,9 @@ namespace NP {
                                         new_or_merged_state(s, index_of(j), predecessors_of(j),
                                                             st, ftimes, j.get_key());
                     // make sure we didn't skip any jobs
-                    check_for_deadline_misses(s, next);
+//                    check_for_deadline_misses(s, next);
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
-                    edges.emplace_back(&j, &s, &next, ftimes);
+                    edges.emplace_back(&j, &s, &next, st, ftimes, false);
 #endif
                 }
 
