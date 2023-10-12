@@ -280,9 +280,22 @@ namespace NP {
 					return false;
 				if (!same_job_preempted(other))
 				    return false;
+
 				for (int i = 0; i < core_avail.size(); i++)
 					if (!core_avail[i].intersects(other.core_avail[i]))
 						return false;
+
+				// check for intersection of remaining execution times of preempted jobs
+				for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
+				    for (auto jt = other.preempted_jobs.begin(); jt != other.preempted_jobs.end(); jt++) {
+				        if (it->first == jt->first) {
+				            if (!it->second.intersects(jt->second))
+				                return false;
+				            break;
+				        }
+				    }
+				}
+
 				return true;
 			}
 
