@@ -253,6 +253,8 @@ namespace NP {
 
 			bool same_job_preempted(const Schedule_state &other) const
 			{
+				if(preempted_jobs.size() != other.preempted_jobs.size())
+					return false;
 				for(auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++)
 				{
 					bool found = false;
@@ -280,6 +282,10 @@ namespace NP {
 					return false;
 				if (!same_job_preempted(other))
 				    return false;
+
+				// there shouldn't be any preempted jobs in both states
+//				if (has_preempted_jobs() || other.has_preempted_jobs())
+//				    return false;
 
 				for (int i = 0; i < core_avail.size(); i++)
 					if (!core_avail[i].intersects(other.core_avail[i]))
@@ -446,6 +452,12 @@ namespace NP {
 				out << "}";
 			}
 
+			bool removed() const{
+				if (core_avail.size() == 0)
+					return true;
+				return false;
+			}
+
 			private:
 
 			const unsigned int num_jobs_scheduled;
@@ -465,7 +477,7 @@ namespace NP {
 			const hash_value_t lookup_key;
 
 			// no accidental copies
-			Schedule_state(const Schedule_state& origin)  = delete;
+//			Schedule_state(const Schedule_state& origin)  = delete;
 		};
 
 	}
