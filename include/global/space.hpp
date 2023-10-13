@@ -133,15 +133,17 @@ namespace NP {
 				const Interval<Time> finish_range;
 				const Interval<Time> start_range;
 				const bool segment;
+				const Interval<Time> segment_remaining;
 
 				Edge(const Job<Time>* s, const State* src, const State* tgt, const Interval<Time>& sr,
-				     const Interval<Time>& fr, const bool seg = false)
+				     const Interval<Time>& fr, const bool seg = false, const Interval<Time>& seg_rem = Interval<Time>{0, 0})
 				: scheduled(s)
 				, source(src)
 				, target(tgt)
 				, finish_range(fr)
 				, start_range(sr)
 				, segment(seg)
+				, segment_remaining(seg_rem)
 				{
 				}
 
@@ -174,6 +176,11 @@ namespace NP {
 				bool is_segment() const
 				{
 					return segment;
+				}
+
+				Interval<Time> get_segment_remaining() const
+				{
+					return segment_remaining;
 				}
 
 			};
@@ -726,9 +733,11 @@ namespace NP {
 					// continue if it is already scheduled
 					if (!s.job_incomplete(index_of(j_lp)))
 						continue;
+
 					// continue if it is already preempted
 					if (s.job_preempted(index_of(j_lp)))
 						continue;
+
 					if (j_lp.higher_priority_than(j)) {
 						possible_preemption = std::min(possible_preemption, j_lp.earliest_arrival());
 					}
@@ -740,9 +749,11 @@ namespace NP {
 					// continue if it is already scheduled
 					if (!s.job_incomplete(index_of(j_hp)))
 						continue;
+
 					// continue if it is already preempted
 					if (s.job_preempted(index_of(j_hp)))
 						continue;
+
 					if (j_hp.higher_priority_than(j)) {
 						possible_preemption = std::min(possible_preemption, j_hp.latest_arrival());
 					}
@@ -833,7 +844,7 @@ namespace NP {
                     // make sure we didn't skip any jobs
 //                    check_for_deadline_misses(s, next);
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
-                    edges.emplace_back(&j, &s, &next,st , ftimes, true);
+                    edges.emplace_back(&j, &s, &next,st , ftimes, true, remaining);
 #endif
                 } else {
                     // update finish-time estimates
@@ -1093,11 +1104,15 @@ namespace NP {
 						    << "\\nES=" << e.earliest_start_time()
  						    << "\\nLS=" << e.latest_start_time()
 						    << "\\nEF=" << e.earliest_finish_time()
-						    << "\\nLF=" << e.latest_finish_time()
-						    << "\"";
+						    << "\\nLF=" << e.latest_finish_time();
+							if (e.is_segment())
+								out << "\\nRE: " << e.get_segment_remaining() ;
+						    out << "\"";
 						if (e.deadline_miss_possible()) {
 							out << ",color=Red,fontcolor=Red";
 						}
+						if (e.is_segment())
+							out << ",style=dashed";
 						out << ",fontsize=8" << "]"
 						    << ";"
 						    << std::endl;
