@@ -730,6 +730,11 @@ namespace NP {
 				for (auto it = jobs_by_earliest_arrival.lower_bound(t + 1);
 					 it != jobs_by_earliest_arrival.upper_bound(t + 1 + j.get_cost().upto()); it++) {
 					const Job<Time> &j_lp = *(it->second);
+
+					// continue if it is the same job
+					if(j_lp.is(j.get_id()))
+						continue;
+
 					// continue if it is already scheduled
 					if (!s.job_incomplete(index_of(j_lp)))
 						continue;
@@ -746,6 +751,11 @@ namespace NP {
 				for (auto it = jobs_by_latest_arrival.lower_bound(t + 1);
 					 it != jobs_by_latest_arrival.upper_bound(t + 1 + j.get_cost().upto()); it++) {
 					const Job<Time> &j_hp = *(it->second);
+
+					// continue if it is the same job
+					if(j_hp.is(j.get_id()))
+						continue;
+
 					// continue if it is already scheduled
 					if (!s.job_incomplete(index_of(j_hp)))
 						continue;
@@ -1008,12 +1018,48 @@ namespace NP {
 						});
 
 #else
+					// select states with minimum scheduled jobs and explore them
+					// first, collect all states with minimum scheduled jobs
+					std::vector<State> exploration_front_min;
+					unsigned int min_jobs = std::numeric_limits<unsigned int>::max();
 					for (const State& s : exploration_front) {
-						explore(s);
-						check_cpu_timeout();
-						if (aborted)
-							break;
+						unsigned int njobs = s.number_of_scheduled_jobs();
+						if (njobs < min_jobs) {
+							min_jobs = njobs;
+						}
 					}
+
+					// then, add them to the exploration front and copy the rest to the next depth
+					for (State& s : exploration_front) {
+						unsigned int njobs = s.number_of_scheduled_jobs();
+						if (njobs == min_jobs) {
+							explore(s);
+							check_cpu_timeout();
+							if (aborted)
+								break;
+						} else {
+							// copy to next depth
+							states().push_back(std::move(s));
+							num_states--;
+#ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
+							// change the state pointer in the edges
+							for (auto& e : edges) {
+								if (e.source == &s)
+									e.source = &states().back();
+								if (e.target == &s)
+									e.target = &states().back();
+							}
+#endif
+						}
+					}
+
+
+//					for (const State& s : exploration_front_min) {
+//						explore(s);
+//						check_cpu_timeout();
+//						if (aborted)
+//							break;
+//					}
 #endif
 
 					// clean up the state cache if necessary
@@ -1026,6 +1072,9 @@ namespace NP {
                         min_completed_jobs = std::min(min_completed_jobs, s.number_of_scheduled_jobs());
                     }
 					current_job_count = min_completed_jobs;
+
+					// print number of states
+					DM("Number of states: " << num_states << std::endl);
 
 #ifdef CONFIG_PARALLEL
 					// propagate any updates to the response-time estimates
@@ -1078,6 +1127,7 @@ namespace NP {
 			{
 					std::map<const Schedule_state<Time>*, unsigned int> state_id;
 					unsigned int i = 0;
+					std::ostream temp(nullptr);
 					out << "digraph {" << std::endl;
 #ifdef CONFIG_PARALLEL
 					for (const Split_states& states : space.get_states()) {
@@ -1086,6 +1136,8 @@ namespace NP {
 					for (const auto& front : space.get_states()) {
 						for (const Schedule_state<Time>& s : front) {
 #endif
+							if(s.removed())
+								continue;
 							state_id[&s] = i++;
 							out << "\tS" << state_id[&s]
 								<< "[label=\"S" << state_id[&s] << ": ";
