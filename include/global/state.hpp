@@ -302,6 +302,17 @@ namespace NP {
 				    }
 				}
 
+				// check for intersection of certain jobs
+				for (auto it = certain_jobs.begin(); it != certain_jobs.end(); it++) {
+					for (auto jt = other.certain_jobs.begin(); jt != other.certain_jobs.end(); jt++) {
+						if (it->first == jt->first) {
+							if (!it->second.intersects(jt->second))
+								return false;
+							break;
+						}
+					}
+				}
+
 				return true;
 			}
 
@@ -358,6 +369,17 @@ namespace NP {
 			{
 				assert(core_avail.size() > 0);
 				return core_avail[0];
+			}
+
+			unsigned int number_of_certainly_available_cores(Time t) const
+			{
+				unsigned int n = 0;
+				for(int i = 0; i < core_avail.size(); i++)
+					if (core_avail[i].max() <= t){
+						n++;
+						break;
+					}
+				return n;
 			}
 
 			bool get_finish_times(Job_index j, Interval<Time> &ftimes) const

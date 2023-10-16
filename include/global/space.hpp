@@ -723,12 +723,12 @@ namespace NP {
 				return when;
 			}
 
-            // find the next lower or upper bound that a higher priority job after time t can possibly release
-			Time possible_preemption(Time t, const State &s, const Job<Time> &j) const {
+            // find the next lower or upper bound that a higher priority job after time est can possibly release
+			Time possible_preemption(Time est, const State &s, const Job<Time> &j) const {
 				Time possible_preemption = Time_model::constants<Time>::infinity();
 				// first we check lower bounds
-				for (auto it = jobs_by_earliest_arrival.lower_bound(t + 1);
-					 it != jobs_by_earliest_arrival.upper_bound(t + 1 + j.get_cost().upto()); it++) {
+				for (auto it = jobs_by_earliest_arrival.lower_bound(est + 1);
+					 it != jobs_by_earliest_arrival.upper_bound(est + 1 + j.get_deadline()); it++) {
 					const Job<Time> &j_lp = *(it->second);
 
 					// continue if it is the same job
@@ -748,8 +748,8 @@ namespace NP {
 					}
 				}
 				// then we check upper bounds
-				for (auto it = jobs_by_latest_arrival.lower_bound(t + 1);
-					 it != jobs_by_latest_arrival.upper_bound(t + 1 + j.get_cost().upto()); it++) {
+				for (auto it = jobs_by_latest_arrival.lower_bound(est + 1);
+					 it != jobs_by_latest_arrival.upper_bound(est + 1 + j.get_deadline()); it++) {
 					const Job<Time> &j_hp = *(it->second);
 
 					// continue if it is the same job
@@ -772,11 +772,67 @@ namespace NP {
 				return possible_preemption;
 			}
 
+			// check number of possible higher priority job release in an interval
+			unsigned int number_of_higher_priority(Time st, Time en, const State &s, const Job<Time> &j) const {
+				unsigned int number_of_higher_priority = 0;
+				// keep index of higher priority jobs
+				std::vector<Job_index> higher_priority_jobs;
+
+				// first we check lower bounds
+				for (auto it = jobs_by_earliest_arrival.lower_bound(st);
+					 it != jobs_by_earliest_arrival.upper_bound(en); it++) {
+					const Job<Time> &j_lp = *(it->second);
+
+					// continue if it is the same job
+					if(j_lp.is(j.get_id()))
+						continue;
+
+					// continue if it is already scheduled
+					if (!s.job_incomplete(index_of(j_lp)))
+						continue;
+
+					// continue if it is already preempted
+					if (s.job_preempted(index_of(j_lp)))
+						continue;
+
+					if (j_lp.higher_priority_than(j)) {
+						higher_priority_jobs.push_back(index_of(j_lp));
+						number_of_higher_priority++;
+					}
+				}
+				// then we check upper bounds
+				for (auto it = jobs_by_latest_arrival.lower_bound(st);
+					 it != jobs_by_latest_arrival.upper_bound(en); it++) {
+					const Job<Time> &j_hp = *(it->second);
+
+					// continue if it is the same job
+					if(j_hp.is(j.get_id()))
+						continue;
+
+					// continue if it is already scheduled
+					if (!s.job_incomplete(index_of(j_hp)))
+						continue;
+
+					// continue if it is already preempted
+					if (s.job_preempted(index_of(j_hp)))
+						continue;
+
+					if (j_hp.higher_priority_than(j) &&
+						std::find(higher_priority_jobs.begin(), higher_priority_jobs.end(), index_of(j_hp)) ==
+						higher_priority_jobs.end()) {
+						number_of_higher_priority++;
+					}
+				}
+
+				return number_of_higher_priority;
+			}
+
+
 			// assumes j is ready
 			// NOTE: we don't use Interval<Time> here because the
 			//       Interval c'tor sorts its arguments.
 			std::pair<Time, Time> start_times(
-				const State& s, const Job<Time>& j, Time t_wc) const
+				const State& s, const Job<Time>& j, Time t_wc, Time &preempt_time) const
 			{
 				auto rt = ready_times(s, j);
 				auto at = s.core_availability();
@@ -792,7 +848,26 @@ namespace NP {
 				DM("t_high: " << t_high << std::endl);
 				Time lst    = std::min(t_wc,
 					t_high - Time_model::constants<Time>::epsilon());
-                lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
+
+				// now lets see if the job can be preempted
+				if (t_preempt != Time_model::constants<Time>::infinity()) {
+					do {
+						auto cert_avail = s.number_of_certainly_available_cores(t_preempt);
+						auto poss_high = number_of_higher_priority(est, t_preempt, s, j);
+						if (cert_avail < poss_high) {
+							// the job can be preempted
+							lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
+							break;
+						} else {
+							// the job cannot be preempted
+							// we have to check the next possible preemption
+							DM("Job cannot be preempted -> look into the next preemption point" << std::endl);
+							t_preempt = possible_preemption(t_preempt, s, j);
+						}
+					} while (t_preempt < lst);
+				}
+
+				preempt_time = t_preempt;
 
 				DM("est: " << est << std::endl);
 				DM("lst: " << lst << std::endl);
@@ -803,7 +878,8 @@ namespace NP {
 			bool dispatch(const State& s, const Job<Time>& j, Time t_wc)
 			{
 				// check if this job has a feasible start-time interval
-				auto _st = start_times(s, j, t_wc);
+				Time t_preempt;
+				auto _st = start_times(s, j, t_wc, t_preempt);
 				if (_st.first > _st.second)
 					return false; // nope
 
@@ -824,8 +900,6 @@ namespace NP {
 
 				DM("Assumed finish time: " << ftimes << std::endl);
 
-                auto t_preempt = possible_preemption(st.min(), s, j);
-
                 Interval<Time> remaining(0, 0);
                 if (t_preempt < ftimes.from()) {
 					DM("[1] Dispatching segment: " << j << std::endl);
@@ -838,6 +912,16 @@ namespace NP {
 				} else {
 					// dispatching the whole job
 					DM("[3] Dispatching: " << j << std::endl);
+				}
+				if(s.job_preempted(index_of(j))) {
+					// if the new finish time is the same as the old one, we don't have to do anything
+					Interval<Time> old_ftimes{0, 0};
+					if (!s.get_finish_times(index_of(j), old_ftimes))
+						old_ftimes = get_finish_times(j);
+					if (old_ftimes == ftimes || old_ftimes.contains(ftimes)) {
+						DM("No change in finish time" << std::endl);
+						return false;
+					}
 				}
 
                 // if we have a leftover, the job is preempted, and we dispatch the first segment
