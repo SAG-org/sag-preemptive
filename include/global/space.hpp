@@ -602,9 +602,12 @@ namespace NP {
 				}
 				if(s.job_preempted(index_of(j))) {
 					Interval<Time> ft{0, 0};
+					// remaining time of the job should be in the state
+					assert(!s.get_finish_times(index_of(j), ft));
 					if (!s.get_finish_times(index_of(j), ft))
 						ft = get_finish_times(j);
 					r.lower_bound(ft.min());
+//					r.lower_bound(ft.max());
 					r.extend_to(ft.max());
 				}
 				return r;
@@ -728,7 +731,7 @@ namespace NP {
 				Time possible_preemption = Time_model::constants<Time>::infinity();
 				// first we check lower bounds
 				for (auto it = jobs_by_earliest_arrival.lower_bound(est + 1);
-					 it != jobs_by_earliest_arrival.upper_bound(est + 1 + j.get_deadline()); it++) {
+					 it != jobs_by_earliest_arrival.upper_bound(est + 1 + (2 * j.get_deadline())); it++) {
 					const Job<Time> &j_lp = *(it->second);
 
 					// continue if it is the same job
@@ -749,7 +752,7 @@ namespace NP {
 				}
 				// then we check upper bounds
 				for (auto it = jobs_by_latest_arrival.lower_bound(est + 1);
-					 it != jobs_by_latest_arrival.upper_bound(est + 1 + j.get_deadline()); it++) {
+					 it != jobs_by_latest_arrival.upper_bound(est + 1 + (2 * j.get_deadline())); it++) {
 					const Job<Time> &j_hp = *(it->second);
 
 					// continue if it is the same job
@@ -779,7 +782,7 @@ namespace NP {
 				std::vector<Job_index> higher_priority_jobs;
 
 				// first we check lower bounds
-				for (auto it = jobs_by_earliest_arrival.lower_bound(st);
+				for (auto it = jobs_by_earliest_arrival.lower_bound(st+1);
 					 it != jobs_by_earliest_arrival.upper_bound(en); it++) {
 					const Job<Time> &j_lp = *(it->second);
 
@@ -801,7 +804,7 @@ namespace NP {
 					}
 				}
 				// then we check upper bounds
-				for (auto it = jobs_by_latest_arrival.lower_bound(st);
+				for (auto it = jobs_by_latest_arrival.lower_bound(st + 1);
 					 it != jobs_by_latest_arrival.upper_bound(en); it++) {
 					const Job<Time> &j_hp = *(it->second);
 
@@ -850,23 +853,25 @@ namespace NP {
 					t_high - Time_model::constants<Time>::epsilon());
 
 				// now lets see if the job can be preempted
-				if (t_preempt != Time_model::constants<Time>::infinity()) {
-					do {
-						auto cert_avail = s.number_of_certainly_available_cores(t_preempt);
-						auto poss_high = number_of_higher_priority(est, t_preempt, s, j);
-						if (cert_avail < poss_high) {
-							// the job can be preempted
-							lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
-							break;
-						} else {
-							// the job cannot be preempted
-							// we have to check the next possible preemption
-							DM("Job cannot be preempted -> look into the next preemption point" << std::endl);
-							t_preempt = possible_preemption(t_preempt, s, j);
-						}
-					} while (t_preempt < lst);
-				}
+//				if (t_preempt != Time_model::constants<Time>::infinity()) {
+//					do {
+//						auto cert_avail = s.number_of_certainly_available_cores(t_preempt);
+//						auto poss_high = number_of_higher_priority(est, t_preempt, s, j);
+//						if (cert_avail - 1 < poss_high) {
+//							// the job can be preempted
+//							lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
+//							break;
+//						} else {
+//							// the job cannot be preempted
+//							// we have to check the next possible preemption
+//							DM("Job cannot be preempted -> look into the next preemption point" << std::endl);
+//							t_preempt = possible_preemption(t_preempt, s, j);
+//							DM("Next t_preempt: " << t_preempt << std::endl);
+//						}
+//					} while (t_preempt < lst + j.get_cost().max());
+//				}
 
+				lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
 				preempt_time = t_preempt;
 
 				DM("est: " << est << std::endl);
@@ -1138,7 +1143,7 @@ namespace NP {
 					}
 
 
-//					for (const State& s : exploration_front_min) {
+//					for (const State& s : exploration_front) {
 //						explore(s);
 //						check_cpu_timeout();
 //						if (aborted)
