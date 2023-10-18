@@ -272,7 +272,7 @@ namespace NP {
 				return true;
 			}
 
-			bool can_merge_with(const Schedule_state<Time>& other) const
+			bool can_merge_with(const Schedule_state<Time>& other)
 			{
 				assert(core_avail.size() == other.core_avail.size());
 
@@ -291,27 +291,97 @@ namespace NP {
 					if (!core_avail[i].intersects(other.core_avail[i]))
 						return false;
 
-				// check for intersection of remaining execution times of preempted jobs
-				for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
-				    for (auto jt = other.preempted_jobs.begin(); jt != other.preempted_jobs.end(); jt++) {
-				        if (it->first == jt->first) {
-				            if (!it->second.intersects(jt->second))
-				                return false;
+				bool this_dominates_other = true;
+				bool other_dominates_this = true;
+
+				// check if this state dominates the other
+				// for each preempted jobs the remaining execution time should be larger
+				// and the finish times should be larger
+				auto it_fin = certain_jobs.begin();
+				auto jt_fin = other.certain_jobs.begin();
+
+				for (auto it_rem = preempted_jobs.begin(); it_rem != preempted_jobs.end(); it_rem++) {
+				    for (auto jt_rem = other.preempted_jobs.begin(); jt_rem != other.preempted_jobs.end(); jt_rem++) {
+				        if (it_rem->first == jt_rem->first) {
+							// first check the remaining execution time
+				            if ( it_rem->second.min() < jt_rem->second.min() || it_rem->second.max() < jt_rem->second.max())
+				                this_dominates_other = false;
+							// then check the finish times
+							// first find the finish time of the job in this state
+							Interval<Time> ftimes = it_fin->second;
+							// then find the finish time of the job in the other state
+							Interval<Time> otimes = jt_fin->second;
+							// check if the finish time of the other state is larger
+							if (otimes.min() < ftimes.min() || ftimes.max() < otimes.max())
+								this_dominates_other = false;
 				            break;
 				        }
 				    }
+					it_fin++;
+					jt_fin++;
 				}
 
-				// check for intersection of certain jobs
-				for (auto it = certain_jobs.begin(); it != certain_jobs.end(); it++) {
-					for (auto jt = other.certain_jobs.begin(); jt != other.certain_jobs.end(); jt++) {
-						if (it->first == jt->first) {
-							if (!it->second.intersects(jt->second))
-								return false;
-							break;
-						}
-					}
+				if (this_dominates_other)
+					return true;
+
+				// check if the other state dominates this state
+				// for each preempted jobs the remaining execution time should be larger
+				// and the finish times should be larger
+				it_fin = certain_jobs.begin();
+				jt_fin = other.certain_jobs.begin();
+
+				for (auto it_rem = preempted_jobs.begin(); it_rem != preempted_jobs.end(); it_rem++) {
+				    for (auto jt_rem = other.preempted_jobs.begin(); jt_rem != other.preempted_jobs.end(); jt_rem++) {
+				        if (it_rem->first == jt_rem->first) {
+							// first check the remaining execution time
+				            if ( it_rem->second.min() > jt_rem->second.min() || it_rem->second.max() > jt_rem->second.max())
+				                other_dominates_this = false;
+							// then check the finish times
+							// first find the finish time of the job in this state
+							Interval<Time> ftimes = it_fin->second;
+							// then find the finish time of the job in the other state
+							Interval<Time> otimes = jt_fin->second;
+							// check if the finish time of the other state is larger
+							if (otimes.min() > ftimes.min() || ftimes.max() > otimes.max())
+								other_dominates_this = false;
+				            break;
+				        }
+				    }
+					it_fin++;
+					jt_fin++;
 				}
+
+				if (!other_dominates_this)
+					return false;
+
+				// move the dominating state preempted jobs to this state
+				certain_jobs=other.certain_jobs;
+				preempted_jobs=other.preempted_jobs;
+
+
+
+
+				// check for intersection of remaining execution times of preempted jobs
+//				for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
+//				    for (auto jt = other.preempted_jobs.begin(); jt != other.preempted_jobs.end(); jt++) {
+//				        if (it->first == jt->first) {
+//				            if (!it->second.intersects(jt->second))
+//				                return false;
+//				            break;
+//				        }
+//				    }
+//				}
+//
+//				// check for intersection of certain jobs
+//				for (auto it = certain_jobs.begin(); it != certain_jobs.end(); it++) {
+//					for (auto jt = other.certain_jobs.begin(); jt != other.certain_jobs.end(); jt++) {
+//						if (it->first == jt->first) {
+//							if (!it->second.intersects(jt->second))
+//								return false;
+//							break;
+//						}
+//					}
+//				}
 
 				return true;
 			}
@@ -325,35 +395,35 @@ namespace NP {
 					core_avail[i] |= other.core_avail[i];
 
 				// vector to collect joint certain jobs
-				std::vector<std::pair<Job_index, Interval<Time>>> new_cj;
-
-				// walk both sorted job lists to see if we find matches
-				auto it = certain_jobs.begin();
-				auto jt = other.certain_jobs.begin();
-				while (it != certain_jobs.end() &&
-				       jt != other.certain_jobs.end()) {
-					if (it->first == jt->first) {
-						// same job
-						new_cj.emplace_back(it->first, it->second | jt->second);
-						it++;
-						jt++;
-					} else if (it->first < jt->first)
-						it++;
-					else
-						jt++;
-				}
-				// move new certain jobs into the state
-				certain_jobs.swap(new_cj);
+//				std::vector<std::pair<Job_index, Interval<Time>>> new_cj;
+//
+//				// walk both sorted job lists to see if we find matches
+//				auto it = certain_jobs.begin();
+//				auto jt = other.certain_jobs.begin();
+//				while (it != certain_jobs.end() &&
+//				       jt != other.certain_jobs.end()) {
+//					if (it->first == jt->first) {
+//						// same job
+//						new_cj.emplace_back(it->first, it->second | jt->second);
+//						it++;
+//						jt++;
+//					} else if (it->first < jt->first)
+//						it++;
+//					else
+//						jt++;
+//				}
+//				// move new certain jobs into the state
+//				certain_jobs.swap(new_cj);
 
 				// widen the remaining time of the preempted jobs to cover both states
-				for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
-				    for (auto jt = other.preempted_jobs.begin(); jt != other.preempted_jobs.end(); jt++) {
-				        if (it->first == jt->first) {
-				            it->second |= jt->second;
-				            break;
-				        }
-				    }
-				}
+//				for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
+//				    for (auto jt = other.preempted_jobs.begin(); jt != other.preempted_jobs.end(); jt++) {
+//				        if (it->first == jt->first) {
+//				            it->second |= jt->second;
+//				            break;
+//				        }
+//				    }
+//				}
 
 				DM("+++ merged " << other << " into " << *this << std::endl);
 

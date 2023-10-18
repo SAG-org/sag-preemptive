@@ -602,7 +602,7 @@ namespace NP {
 				}
 				if(s.job_preempted(index_of(j))) {
 					Interval<Time> ft{0, 0};
-					// remaining time of the job should be in the state
+					// finish times of the job should be in the state
 					assert(!s.get_finish_times(index_of(j), ft));
 					if (!s.get_finish_times(index_of(j), ft))
 						ft = get_finish_times(j);
