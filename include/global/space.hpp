@@ -5,6 +5,7 @@
 #include <map>
 #include <vector>
 #include <deque>
+#include <queue>
 #include <forward_list>
 #include <algorithm>
 
@@ -485,10 +486,13 @@ namespace NP {
 				while (true) {
 					// check if key exists
 					if (states_by_key.find(acc, s->get_key())) {
-						for (State_ref other : acc->second)
-							if (other->try_to_merge(*s))
+						for (State_ref other : acc->second) {
+							if(other->try_to_dominate(*s))
 								return other;
-						// If we reach here, we failed to merge, so go ahead
+							else if (other->try_to_merge(*s))
+								return other;
+						}
+						// If we reach here, we failed to dominate or merge, so go ahead
 						// and insert it.
 						insert_cache_state(acc, s);
 						return s;
@@ -525,9 +529,12 @@ namespace NP {
 
 				// cannot merge if key doesn't exist
 				if (pair_it != states_by_key.end())
-					for (State_ref other : pair_it->second)
-						if (other->try_to_merge(*s_ref))
+					for (State_ref other : pair_it->second) {
+						if (other->try_to_dominate(*s_ref))
 							return other;
+						else if (other->try_to_merge(*s_ref))
+							return other;
+					}
 				// if we reach here, we failed to merge
 				cache_state(s_ref);
 				return s_ref;
@@ -576,8 +583,7 @@ namespace NP {
 				}
 				if(s.job_preempted(index_of(j))) {
 					Interval<Time> ft{0, 0};
-					if (!s.get_finish_times(index_of(j), ft))
-						ft = get_finish_times(j);
+					s.get_finish_times(index_of(j), ft);
 					r.lower_bound(ft.min());
 					r.extend_to(ft.max());
 				}
@@ -835,7 +841,7 @@ namespace NP {
 			// NOTE: we don't use Interval<Time> here because the
 			//       Interval c'tor sorts its arguments.
 			std::pair<Time, Time> start_times(
-				const State& s, const Job<Time>& j, Time t_wc, Time &preempt_time) const
+				const State& s, const Job<Time>& j, Time t_wc, Time &t_high_time, Time &preempt_time) const
 			{
 				auto rt = ready_times(s, j);
 				auto at = s.core_availability();
@@ -871,8 +877,9 @@ namespace NP {
 //					} while (t_preempt < lst + j.get_cost().max());
 //				}
 
-				lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
+//				lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
 				preempt_time = t_preempt;
+				t_high_time = t_high;
 
 				DM("est: " << est << std::endl);
 				DM("lst: " << lst << std::endl);
@@ -884,8 +891,12 @@ namespace NP {
 			{
 				// check if this job has a feasible start-time interval
 				Time t_preempt;
-				auto _st = start_times(s, j, t_wc, t_preempt);
+				Time t_high;
+				auto _st = start_times(s, j, t_wc, t_high, t_preempt);
 				if (_st.first > _st.second)
+					return false; // nope
+				// check if it can also start execution after the possible preemption point
+				if(t_preempt < _st.second)
 					return false; // nope
 
 				Interval<Time> st{_st};
@@ -913,7 +924,11 @@ namespace NP {
 				}else if (ftimes.from() < t_preempt && t_preempt < ftimes.until()) {
 					DM("[2] Dispatching segment: " << j << std::endl);
 					remaining = {0, ftimes.upto() - t_preempt};
-					ftimes = {ftimes.from(), t_preempt};
+					// since job possibly finished at time ftimes.from(),
+					// if it is preempted the finish time of the previous segment is t_preempt
+					ftimes = {t_preempt, t_preempt};
+					// update the finish time
+					update_finish_times(j, {ftimes.from(), t_preempt});
 				} else {
 					// dispatching the whole job
 					DM("[3] Dispatching: " << j << std::endl);
@@ -921,8 +936,7 @@ namespace NP {
 				if(s.job_preempted(index_of(j))) {
 					// if the new finish time is the same as the old one, we don't have to do anything
 					Interval<Time> old_ftimes{0, 0};
-					if (!s.get_finish_times(index_of(j), old_ftimes))
-						old_ftimes = get_finish_times(j);
+					s.get_finish_times(index_of(j), old_ftimes);
 					if (old_ftimes == ftimes || old_ftimes.contains(ftimes)) {
 						DM("No change in finish time" << std::endl);
 						return false;
@@ -1108,8 +1122,6 @@ namespace NP {
 
 #else
 					// select states with minimum scheduled jobs and explore them
-					// first, collect all states with minimum scheduled jobs
-					std::vector<State> exploration_front_min;
 					unsigned int min_jobs = std::numeric_limits<unsigned int>::max();
 					for (const State& s : exploration_front) {
 						unsigned int njobs = s.number_of_scheduled_jobs();

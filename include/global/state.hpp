@@ -283,10 +283,90 @@ namespace NP {
 				if (!same_job_preempted(other))
 				    return false;
 
-				// there shouldn't be any preempted jobs in both states
-//				if (has_preempted_jobs() || other.has_preempted_jobs())
-//				    return false;
+				for (int i = 0; i < core_avail.size(); i++)
+					if (!core_avail[i].intersects(other.core_avail[i]))
+						return false;
 
+				// check for intersection of remaining execution times of preempted jobs
+				for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
+				    for (auto jt = other.preempted_jobs.begin(); jt != other.preempted_jobs.end(); jt++) {
+				        if (it->first == jt->first) {
+				            if (!it->second.intersects(jt->second))
+				                return false;
+				            break;
+				        }
+				    }
+				}
+
+				// check for intersection of certain jobs
+				for (auto it = certain_jobs.begin(); it != certain_jobs.end(); it++) {
+					for (auto jt = other.certain_jobs.begin(); jt != other.certain_jobs.end(); jt++) {
+						if (it->first == jt->first) {
+							if (!it->second.intersects(jt->second))
+								return false;
+							break;
+						}
+					}
+				}
+
+				return true;
+			}
+
+			bool try_to_merge(const Schedule_state<Time>& other)
+			{
+				if (!can_merge_with(other))
+					return false;
+
+				for (int i = 0; i < core_avail.size(); i++)
+					core_avail[i] |= other.core_avail[i];
+
+				// vector to collect joint certain jobs
+				std::vector<std::pair<Job_index, Interval<Time>>> new_cj;
+
+				// walk both sorted job lists to see if we find matches
+				auto it = certain_jobs.begin();
+				auto jt = other.certain_jobs.begin();
+				while (it != certain_jobs.end() &&
+				       jt != other.certain_jobs.end()) {
+					if (it->first == jt->first) {
+						// same job
+						new_cj.emplace_back(it->first, it->second | jt->second);
+						it++;
+						jt++;
+					} else if (it->first < jt->first)
+						it++;
+					else
+						jt++;
+				}
+				// move new certain jobs into the state
+				certain_jobs.swap(new_cj);
+
+//				 widen the remaining time of the preempted jobs to cover both states
+				for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
+				    for (auto jt = other.preempted_jobs.begin(); jt != other.preempted_jobs.end(); jt++) {
+				        if (it->first == jt->first) {
+				            it->second |= jt->second;
+				            break;
+				        }
+				    }
+				}
+
+				DM("+++ merged " << other << " into " << *this << std::endl);
+
+				return true;
+			}
+
+			bool can_dominate(const Schedule_state<Time>& other){
+				assert(core_avail.size() == other.core_avail.size());
+
+				if (get_key() != other.get_key())
+					return false;
+				if (!same_jobs_scheduled(other))
+					return false;
+				if (!same_job_preempted(other))
+					return false;
+
+				// check cores availability intersection
 				for (int i = 0; i < core_avail.size(); i++)
 					if (!core_avail[i].intersects(other.core_avail[i]))
 						return false;
@@ -358,76 +438,20 @@ namespace NP {
 				certain_jobs=other.certain_jobs;
 				preempted_jobs=other.preempted_jobs;
 
-
-
-
-				// check for intersection of remaining execution times of preempted jobs
-//				for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
-//				    for (auto jt = other.preempted_jobs.begin(); jt != other.preempted_jobs.end(); jt++) {
-//				        if (it->first == jt->first) {
-//				            if (!it->second.intersects(jt->second))
-//				                return false;
-//				            break;
-//				        }
-//				    }
-//				}
-//
-//				// check for intersection of certain jobs
-//				for (auto it = certain_jobs.begin(); it != certain_jobs.end(); it++) {
-//					for (auto jt = other.certain_jobs.begin(); jt != other.certain_jobs.end(); jt++) {
-//						if (it->first == jt->first) {
-//							if (!it->second.intersects(jt->second))
-//								return false;
-//							break;
-//						}
-//					}
-//				}
-
 				return true;
 			}
 
-			bool try_to_merge(const Schedule_state<Time>& other)
-			{
-				if (!can_merge_with(other))
+			bool try_to_dominate(const Schedule_state<Time>& other){
+				if (!can_dominate(other))
 					return false;
 
 				for (int i = 0; i < core_avail.size(); i++)
 					core_avail[i] |= other.core_avail[i];
 
-				// vector to collect joint certain jobs
-//				std::vector<std::pair<Job_index, Interval<Time>>> new_cj;
-//
-//				// walk both sorted job lists to see if we find matches
-//				auto it = certain_jobs.begin();
-//				auto jt = other.certain_jobs.begin();
-//				while (it != certain_jobs.end() &&
-//				       jt != other.certain_jobs.end()) {
-//					if (it->first == jt->first) {
-//						// same job
-//						new_cj.emplace_back(it->first, it->second | jt->second);
-//						it++;
-//						jt++;
-//					} else if (it->first < jt->first)
-//						it++;
-//					else
-//						jt++;
-//				}
-//				// move new certain jobs into the state
-//				certain_jobs.swap(new_cj);
-
-				// widen the remaining time of the preempted jobs to cover both states
-//				for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
-//				    for (auto jt = other.preempted_jobs.begin(); jt != other.preempted_jobs.end(); jt++) {
-//				        if (it->first == jt->first) {
-//				            it->second |= jt->second;
-//				            break;
-//				        }
-//				    }
-//				}
-
-				DM("+++ merged " << other << " into " << *this << std::endl);
+				DM("+++ dominated " << other << " by " << *this << std::endl);
 
 				return true;
+
 			}
 
 			const unsigned int number_of_scheduled_jobs() const
