@@ -865,7 +865,7 @@ namespace NP {
 //						auto poss_high = number_of_higher_priority(est, t_preempt, s, j);
 //						if (cert_avail - 1 < poss_high) {
 //							// the job can be preempted
-//							lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
+////							lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
 //							break;
 //						} else {
 //							// the job cannot be preempted
@@ -1122,25 +1122,18 @@ namespace NP {
 
 #else
 					// select states with minimum scheduled jobs and explore them
-					unsigned int min_jobs = std::numeric_limits<unsigned int>::max();
-					for (const State& s : exploration_front) {
-						unsigned int njobs = s.number_of_scheduled_jobs();
-						if (njobs < min_jobs) {
-							min_jobs = njobs;
-						}
-					}
+					unsigned int min_jobs = current_job_count;
+					std::vector<unsigned int> other_index;
 
-					// then, add them to the exploration front and copy the rest to the next depth
-					for (State& s : exploration_front) {
+					// Move the states with scheduled jobs more than minimum to the next depth
+					// and keep the rest state index in other_index for later exploration
+					for (unsigned int i = 0; i < exploration_front.size(); i++) {
+						State& s = exploration_front[i];
 						unsigned int njobs = s.number_of_scheduled_jobs();
-						if (njobs == min_jobs) {
-							explore(s);
-							check_cpu_timeout();
-							if (aborted)
-								break;
-						} else {
+						if (njobs != min_jobs) {
 							// copy to next depth
 							states().push_back(std::move(s));
+							cache_state(--states().end());
 							num_states--;
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 							// change the state pointer in the edges
@@ -1152,6 +1145,17 @@ namespace NP {
 							}
 #endif
 						}
+						else
+							other_index.push_back(i);
+					}
+
+					// then, explore the states with minimum scheduled jobs
+					for (auto i : other_index) {
+						State& s = exploration_front[i];
+						explore(s);
+						check_cpu_timeout();
+						if (aborted)
+							break;
 					}
 
 
