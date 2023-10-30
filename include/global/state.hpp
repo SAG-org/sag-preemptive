@@ -58,12 +58,9 @@ namespace NP {
 				// first remove the previous segment of the job
 				// make a copy of certain_jobs to iterate over
 				auto certain_jobs_temp = from.certain_jobs;
-				for (auto it = certain_jobs_temp.begin(); it != certain_jobs_temp.end(); it++) {
-					if (it->first == j) {
-						certain_jobs_temp.erase(it);
-						break;
-					}
-				}
+				certain_jobs_temp.erase(std::remove_if(certain_jobs_temp.begin(), certain_jobs_temp.end(),
+					   [&](const std::pair<Job_index, Interval<Time>>& rj) { return rj.first == j; }), certain_jobs_temp.end());
+
 				certain_jobs = certain_jobs_temp;
 				int n_prec = 0;
 //				// update scheduled jobs
@@ -88,12 +85,10 @@ namespace NP {
 //					certain_jobs.emplace_back(j, finish_times);
 
                 // if it is in the preempted jobs, remove it
-                for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
-                    if (it->first == j) {
-                        preempted_jobs.erase(it);
-                        break;
-                    }
-                }
+				preempted_jobs.erase(std::remove_if(preempted_jobs.begin(), preempted_jobs.end(),
+													[&](const std::pair<Job_index, Interval<Time>> &rj) {
+														return rj.first == j;
+													}), preempted_jobs.end());
 
 				// update the cores availability intervals
 				std::vector<Time> ca, pa;
@@ -161,12 +156,8 @@ namespace NP {
 				// first remove the previous segment of the job
 				// make a copy of certain_jobs to iterate over
 				auto certain_jobs_temp = from.certain_jobs;
-				for (auto it = certain_jobs_temp.begin(); it != certain_jobs_temp.end(); it++) {
-					if (it->first == j) {
-						certain_jobs_temp.erase(it);
-						break;
-					}
-				}
+				certain_jobs_temp.erase(std::remove_if(certain_jobs_temp.begin(), certain_jobs_temp.end(),
+				   [&](const std::pair<Job_index, Interval<Time>>& rj) { return rj.first == j; }), certain_jobs_temp.end());
                 int n_prec = 0;
                 // update scheduled jobs
                 // keep it sorted to make it easier to merge
