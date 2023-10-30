@@ -583,7 +583,7 @@ namespace NP {
 				}
 				if(s.job_preempted(index_of(j))) {
 					Interval<Time> ft{0, 0};
-					s.get_finish_times(index_of(j), ft);
+					ft = s.get_segment_finish_time(index_of(j));
 					r.lower_bound(ft.min());
 					r.extend_to(ft.max());
 				}
@@ -609,9 +609,7 @@ namespace NP {
 				if(s.job_preempted(index_of(j))) {
 					Interval<Time> ft{0, 0};
 					// finish times of the job should be in the state
-					assert(!s.get_finish_times(index_of(j), ft));
-					if (!s.get_finish_times(index_of(j), ft))
-						ft = get_finish_times(j);
+					ft = s.get_segment_finish_time(index_of(j));
 					r.lower_bound(ft.min());
 //					r.lower_bound(ft.max());
 					r.extend_to(ft.max());
@@ -658,13 +656,12 @@ namespace NP {
 				// let's look at the higher priority preempted jobs
 				auto preempted_jobs = s.get_preempted_jobs();
 				for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
-					const Job<Time>& j = jobs[it->first];
+					const Job<Time>& j = jobs[std::get<0>(*it)];
 					if(j.is(reference_job.get_id()))
 						continue;
 					if (j.higher_priority_than(reference_job)) {
 						Interval<Time> ft{0, 0};
-						if (!s.get_finish_times(index_of(j), ft))
-							ft = get_finish_times(j);
+						ft = s.get_segment_finish_time(std::get<0>(*it));
 						DM("HP -> " << j << " " << ft << std::endl);
 						when = std::min(when, ft.max());
 					}
@@ -881,7 +878,7 @@ namespace NP {
 //					} while (t_preempt < lst + j.get_cost().max());
 //				}
 
-//				lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
+				lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
 				preempt_time = t_preempt;
 				t_high_time = t_high;
 
@@ -900,8 +897,8 @@ namespace NP {
 				if (_st.first > _st.second)
 					return false; // nope
 				// check if it can also start execution after the possible preemption point
-				if(t_preempt < _st.second)
-					return false; // nope
+//				if(t_preempt < _st.second)
+//					return false; // nope
 
 				Interval<Time> st{_st};
 
@@ -940,7 +937,7 @@ namespace NP {
 				if(s.job_preempted(index_of(j))) {
 					// if the new finish time is the same as the old one, we don't have to do anything
 					Interval<Time> old_ftimes{0, 0};
-					s.get_finish_times(index_of(j), old_ftimes);
+					old_ftimes = s.get_segment_finish_time(index_of(j));
 					if (old_ftimes == ftimes || old_ftimes.contains(ftimes)) {
 						DM("No change in finish time" << std::endl);
 						return false;
@@ -1009,10 +1006,15 @@ namespace NP {
 					// check the first time that the previous segments of a preempted job is completed
 					Time min_finish_time = Time_model::constants<Time>::infinity();
 					auto preempted_jobs = s.get_preempted_jobs();
-					for (const auto& j : preempted_jobs) {
+//					for (const auto& j : preempted_jobs) {
+//						Interval<Time> ft{0, 0};
+//						s.get_finish_times(, ft);
+//						min_finish_time = std::min(min_finish_time, ft.max());
+//					}
+					for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
+						const Job<Time>& j = jobs[std::get<0>(*it)];
 						Interval<Time> ft{0, 0};
-						if (!s.get_finish_times(j.first, ft))
-							ft = get_finish_times(jobs[j.first]);
+						ft = s.get_segment_finish_time(std::get<0>(*it));
 						min_finish_time = std::min(min_finish_time, ft.max());
 					}
 					min_finish_time = std::max(min_finish_time, t_core);
@@ -1062,8 +1064,9 @@ namespace NP {
                 DM("==== [3] ====" << std::endl);
                 // (3) check jobs that are preempted (these jobs are assumed to be certainly released in the past)
                 auto preempted_jobs = s.get_preempted_jobs();
-                for (const auto& rj : preempted_jobs) {
-                    found_one |= dispatch(s,  jobs[rj.first], t_wc);
+				for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
+					const Job<Time>& j = jobs[std::get<0>(*it)];
+                    found_one |= dispatch(s,  j, t_wc);
                 }
 
 				// check for a dead end
