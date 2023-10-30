@@ -754,6 +754,8 @@ namespace NP {
 
 					if (j_lp.higher_priority_than(j)) {
 						possible_preemption = std::min(possible_preemption, j_lp.earliest_arrival());
+						// since we are looking for the next possible preemption, we can stop here
+						break;
 					}
 				}
 				// then we check upper bounds
@@ -775,6 +777,8 @@ namespace NP {
 
 					if (j_hp.higher_priority_than(j)) {
 						possible_preemption = std::min(possible_preemption, j_hp.latest_arrival());
+						// since we are looking for the next possible preemption, we can stop here
+						break;
 					}
 				}
 
