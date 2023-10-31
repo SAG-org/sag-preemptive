@@ -530,10 +530,12 @@ namespace NP {
 				// cannot merge if key doesn't exist
 				if (pair_it != states_by_key.end())
 					for (State_ref other : pair_it->second) {
-						if (other->try_to_dominate(*s_ref))
-							return other;
-						else if (other->try_to_merge(*s_ref))
-							return other;
+						if(other->check_reduction_rule(*s_ref)) {
+							if (other->try_to_dominate(*s_ref))
+								return other;
+							else if (other->try_to_merge(*s_ref))
+								return other;
+						}
 					}
 				// if we reach here, we failed to merge
 				cache_state(s_ref);

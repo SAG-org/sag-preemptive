@@ -257,8 +257,7 @@ namespace NP {
 				return true;
 			}
 
-			bool can_merge_with(const Schedule_state<Time>& other)
-			{
+			bool check_reduction_rule(const Schedule_state<Time>& other){
 				assert(core_avail.size() == other.core_avail.size());
 
 				if (get_key() != other.get_key())
@@ -266,12 +265,17 @@ namespace NP {
 				if (!same_jobs_scheduled(other))
 					return false;
 				if (!same_job_preempted(other))
-				    return false;
+					return false;
 
 				for (int i = 0; i < core_avail.size(); i++)
 					if (!core_avail[i].intersects(other.core_avail[i]))
 						return false;
 
+				return true;
+			}
+
+			bool can_merge_with(const Schedule_state<Time>& other)
+			{
 				// check for intersection of remaining execution times and finish times of preempted jobs
 				auto jt = other.preempted_jobs.begin();
 				for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
@@ -332,20 +336,6 @@ namespace NP {
 			}
 
 			bool can_dominate(const Schedule_state<Time>& other){
-				assert(core_avail.size() == other.core_avail.size());
-
-				if (get_key() != other.get_key())
-					return false;
-				if (!same_jobs_scheduled(other))
-					return false;
-				if (!same_job_preempted(other))
-					return false;
-
-				// check cores availability intersection
-				for (int i = 0; i < core_avail.size(); i++)
-					if (!core_avail[i].intersects(other.core_avail[i]))
-						return false;
-
 				bool this_dominates_other = true;
 				bool other_dominates_this = true;
 
