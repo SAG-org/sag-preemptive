@@ -442,7 +442,7 @@ namespace NP {
 
 			void dealloc_state(State_ref s)
 			{
-				assert(&(*(--states().end())); == s);
+				assert(&(*(--states().end())) == s);
 				states().pop_back();
 			}
 
@@ -860,23 +860,23 @@ namespace NP {
 					t_high - Time_model::constants<Time>::epsilon());
 
 				// now lets see if the job can be preempted
-//				if (t_preempt != Time_model::constants<Time>::infinity()) {
-//					do {
-//						auto cert_avail = s.number_of_certainly_available_cores(t_preempt);
-//						auto poss_high = number_of_higher_priority(est, t_preempt, s, j);
-//						if (cert_avail - 1 < poss_high) {
-//							// the job can be preempted
-////							lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
-//							break;
-//						} else {
-//							// the job cannot be preempted
-//							// we have to check the next possible preemption
-//							DM("Job cannot be preempted -> look into the next preemption point" << std::endl);
-//							t_preempt = possible_preemption(t_preempt, s, j);
-//							DM("Next t_preempt: " << t_preempt << std::endl);
-//						}
-//					} while (t_preempt < lst + j.get_cost().max());
-//				}
+				if (t_preempt != Time_model::constants<Time>::infinity()) {
+					do {
+						auto cert_avail = s.number_of_certainly_available_cores(t_preempt);
+						auto poss_high = number_of_higher_priority(est, t_preempt, s, j);
+						if (cert_avail - 1 < poss_high) {
+							// the job can be preempted
+							lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
+							break;
+						} else {
+							// the job cannot be preempted
+							// we have to check the next possible preemption
+							DM("Job cannot be preempted -> look into the next preemption point" << std::endl);
+							t_preempt = possible_preemption(t_preempt, s, j);
+							DM("Next t_preempt: " << t_preempt << std::endl);
+						}
+					} while (t_preempt < lst + j.get_cost().max());
+				}
 
 				lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
 				preempt_time = t_preempt;
@@ -934,15 +934,15 @@ namespace NP {
 					// dispatching the whole job
 					DM("[3] Dispatching: " << j << std::endl);
 				}
-				if(s.job_preempted(index_of(j))) {
-					// if the new finish time is the same as the old one, we don't have to do anything
-					Interval<Time> old_ftimes{0, 0};
-					old_ftimes = s.get_segment_finish_time(index_of(j));
-					if (old_ftimes == ftimes || old_ftimes.contains(ftimes)) {
-						DM("No change in finish time" << std::endl);
-						return false;
-					}
-				}
+//				if(s.job_preempted(index_of(j))) {
+//					// if the new finish time is the same as the old one, we don't have to do anything
+//					Interval<Time> old_ftimes{0, 0};
+//					old_ftimes = s.get_segment_finish_time(index_of(j));
+//					if (old_ftimes == ftimes || old_ftimes.contains(ftimes)) {
+//						DM("No change in finish time" << std::endl);
+//						return false;
+//					}
+//				}
 
                 // if we have a leftover, the job is preempted, and we dispatch the first segment
                 if (remaining.until() > 0) {
