@@ -131,7 +131,6 @@ namespace NP {
                     Interval<Time> remaining_times)
                     : num_jobs_scheduled(from.num_jobs_scheduled)
                     , scheduled_jobs(from.scheduled_jobs)
-                    , preempted_jobs(from.preempted_jobs)
                     , lookup_key(from.lookup_key)
             {
                 auto est = start_times.min();
@@ -173,13 +172,21 @@ namespace NP {
 
                 // if it is already in the preempted jobs, update its remaining time
                 bool updated_j = false;
-                for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
-					if (std::get<0>(*it) == j) {
-						std::get<1>(*it) = remaining_times;
-						std::get<2>(*it) = finish_times;
+                for (auto it = from.preempted_jobs.begin(); it != from.preempted_jobs.end(); it++) {
+					if (std::get<0>(*it) < j)
+						preempted_jobs.emplace_back(*it);
+					else if (std::get<0>(*it) == j) {
+						preempted_jobs.emplace_back(j, remaining_times, finish_times);
                         updated_j = true;
-                        break;
                     }
+					else if (std::get<0>(*it) > j && !updated_j) {
+						preempted_jobs.emplace_back(j, remaining_times, finish_times);
+						preempted_jobs.emplace_back(*it);
+						updated_j = true;
+					} else{
+						preempted_jobs.emplace_back(*it);
+					}
+
                 }
                 // add the remaining segment of the job to the preempted jobs
                 if (!updated_j)
@@ -238,20 +245,15 @@ namespace NP {
 			{
 				if(preempted_jobs.size() != other.preempted_jobs.size())
 					return false;
-				for(auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++)
-				{
-					bool found = false;
-					for(auto jt = other.preempted_jobs.begin(); jt != other.preempted_jobs.end(); jt++)
-					{
-						if(std::get<0>(*it) == std::get<0>(*jt))
-						{
-							found = true;
-							break;
-						}
-					}
-					if(!found)
+
+				auto jt = other.preempted_jobs.begin();
+				for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
+					// since the jobs are sorted, we can stop if we find a job that is not in the other state
+					if (std::get<0>(*it) != std::get<0>(*jt))
 						return false;
+					jt++;
 				}
+
 				return true;
 			}
 
@@ -271,11 +273,15 @@ namespace NP {
 						return false;
 
 				// check for intersection of remaining execution times and finish times of preempted jobs
+				auto jt = other.preempted_jobs.begin();
 				for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
-						if (!std::get<1>(*it).intersects(other.get_remaining_time(std::get<0>(*it))))
-							return false;
-						if (!std::get<2>(*it).intersects(other.get_segment_finish_time(std::get<0>(*it))))
-							return false;
+					// since the jobs are sorted, we can stop if we find a job that is not in the other state
+					if (!std::get<1>(*it).intersects(std::get<1>(*jt)))
+						return false;
+					// check if the finish times intersect
+					if (!std::get<2>(*it).intersects(std::get<2>(*jt)))
+						return false;
+					jt++;
 				}
 
 				return true;
@@ -311,16 +317,13 @@ namespace NP {
 				certain_jobs.swap(new_cj);
 
 //				 widen the remaining time of the preempted jobs to cover both states
+				auto jt_pr = other.preempted_jobs.begin();
 				for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
-				    for (auto jt = other.preempted_jobs.begin(); jt != other.preempted_jobs.end(); jt++) {
-				        if (std::get<0>(*it) == std::get<0>(*jt)) {
-							// widen the remaining time
-							std::get<1>(*it) |= std::get<1>(*jt);
-							// widen the finish time
-							std::get<2>(*it) |= std::get<2>(*jt);
-				            break;
-				        }
-				    }
+					// widen the remaining time
+					std::get<1>(*it) |= std::get<1>(*jt_pr);
+					// widen the finish time
+					std::get<2>(*it) |= std::get<2>(*jt_pr);
+					jt_pr++;
 				}
 
 				DM("+++ merged " << other << " into " << *this << std::endl);
@@ -349,25 +352,26 @@ namespace NP {
 				// check if this state dominates the other
 				// for each preempted jobs the remaining execution time should be larger
 				// and the finish times should be larger
-
+				auto jt_rem = other.preempted_jobs.begin();
 				for (auto it_rem = preempted_jobs.begin(); it_rem != preempted_jobs.end(); it_rem++) {
-				    for (auto jt_rem = other.preempted_jobs.begin(); jt_rem != other.preempted_jobs.end(); jt_rem++) {
-				        if (std::get<0>(*it_rem) == std::get<0>(*jt_rem)) {
-							// first check the remaining execution time
-				            if ( std::get<1>(*it_rem).min() < std::get<1>(*jt_rem).min() ||
-												std::get<1>(*it_rem).max() < std::get<1>(*jt_rem).max())
-				                this_dominates_other = false;
-							// then check the finish times
-							// first find the finish time of the job in this state
-							Interval<Time> ftimes = std::get<2>(*it_rem);
-							// then find the finish time of the job in the other state
-							Interval<Time> otimes = std::get<2>(*jt_rem);
-							// check if the finish time of the other state is larger
-							if (otimes.min() < ftimes.min() || ftimes.max() < otimes.max())
-								this_dominates_other = false;
-				            break;
-				        }
-				    }
+						// first check the remaining execution time
+					if ( std::get<1>(*it_rem).min() < std::get<1>(*jt_rem).min() ||
+										std::get<1>(*it_rem).max() < std::get<1>(*jt_rem).max()) {
+						this_dominates_other = false;
+						break;
+					}
+					// then check the finish times
+					// first find the finish time of the job in this state
+					Interval<Time> ftimes = std::get<2>(*it_rem);
+					// then find the finish time of the job in the other state
+					Interval<Time> otimes = std::get<2>(*jt_rem);
+					// check if the finish time of the other state is larger
+					if (otimes.min() < ftimes.min() || ftimes.max() < otimes.max()) {
+						this_dominates_other = false;
+						break;
+					}
+
+					jt_rem++;
 				}
 
 				if (this_dominates_other)
@@ -376,25 +380,25 @@ namespace NP {
 				// check if the other state dominates this state
 				// for each preempted jobs the remaining execution time should be larger
 				// and the finish times should be larger
-
+				auto jt_orem = other.preempted_jobs.begin();
 				for (auto it_rem = preempted_jobs.begin(); it_rem != preempted_jobs.end(); it_rem++) {
-				    for (auto jt_rem = other.preempted_jobs.begin(); jt_rem != other.preempted_jobs.end(); jt_rem++) {
-						if (std::get<0>(*it_rem) == std::get<0>(*jt_rem)) {
-							// first check the remaining execution time
-				            if ( std::get<1>(*it_rem).min() > std::get<1>(*jt_rem).min() ||
-											std::get<1>(*it_rem).max() > std::get<1>(*jt_rem).max())
-				                other_dominates_this = false;
-							// then check the finish times
-							// first find the finish time of the job in this state
-							Interval<Time> ftimes = std::get<2>(*it_rem);
-							// then find the finish time of the job in the other state
-							Interval<Time> otimes = std::get<2>(*jt_rem);
-							// check if the finish time of the other state is larger
-							if (otimes.min() > ftimes.min() || ftimes.max() > otimes.max())
-								other_dominates_this = false;
-				            break;
-				        }
-				    }
+					// first check the remaining execution time
+					if ( std::get<1>(*it_rem).min() > std::get<1>(*jt_rem).min() ||
+									std::get<1>(*it_rem).max() > std::get<1>(*jt_rem).max()){
+						other_dominates_this = false;
+						break;
+					}
+					// then check the finish times
+					// first find the finish time of the job in this state
+					Interval<Time> ftimes = std::get<2>(*it_rem);
+					// then find the finish time of the job in the other state
+					Interval<Time> otimes = std::get<2>(*jt_rem);
+					// check if the finish time of the other state is larger
+					if (otimes.min() > ftimes.min() || ftimes.max() > otimes.max()) {
+						other_dominates_this = false;
+						break;
+					}
+					jt_orem++;
 				}
 
 				if (!other_dominates_this)
