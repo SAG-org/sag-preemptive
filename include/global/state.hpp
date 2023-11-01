@@ -373,8 +373,8 @@ namespace NP {
 				auto jt_orem = other.preempted_jobs.begin();
 				for (auto it_rem = preempted_jobs.begin(); it_rem != preempted_jobs.end(); it_rem++) {
 					// first check the remaining execution time
-					if ( std::get<1>(*it_rem).min() > std::get<1>(*jt_rem).min() ||
-									std::get<1>(*it_rem).max() > std::get<1>(*jt_rem).max()){
+					if ( std::get<1>(*it_rem).min() > std::get<1>(*jt_orem).min() ||
+									std::get<1>(*it_rem).max() > std::get<1>(*jt_orem).max()){
 						other_dominates_this = false;
 						break;
 					}
@@ -382,7 +382,7 @@ namespace NP {
 					// first find the finish time of the job in this state
 					Interval<Time> ftimes = std::get<2>(*it_rem);
 					// then find the finish time of the job in the other state
-					Interval<Time> otimes = std::get<2>(*jt_rem);
+					Interval<Time> otimes = std::get<2>(*jt_orem);
 					// check if the finish time of the other state is larger
 					if (otimes.min() > ftimes.min() || ftimes.max() > otimes.max()) {
 						other_dominates_this = false;
