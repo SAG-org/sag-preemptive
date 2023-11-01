@@ -732,11 +732,11 @@ namespace NP {
 			}
 
             // find the next lower or upper bound that a higher priority job after time est can possibly release
-			Time possible_preemption(Time est, const State &s, const Job<Time> &j) const {
+			Time possible_preemption(Time est, Time lft, const State &s, const Job<Time> &j) const {
 				Time possible_preemption = Time_model::constants<Time>::infinity();
 				// first we check lower bounds
 				for (auto it = jobs_by_earliest_arrival.lower_bound(est + 1);
-					 it != jobs_by_earliest_arrival.upper_bound(est + 1 + (2 * j.get_deadline())); it++) {
+					 it != jobs_by_earliest_arrival.upper_bound(lft); it++) {
 					const Job<Time> &j_lp = *(it->second);
 
 					// continue if it is the same job
@@ -759,7 +759,7 @@ namespace NP {
 				}
 				// then we check upper bounds
 				for (auto it = jobs_by_latest_arrival.lower_bound(est + 1);
-					 it != jobs_by_latest_arrival.upper_bound(est + 1 + (2 * j.get_deadline())); it++) {
+					 it != jobs_by_latest_arrival.upper_bound(lft); it++) {
 					const Job<Time> &j_hp = *(it->second);
 
 					// continue if it is the same job
@@ -853,32 +853,32 @@ namespace NP {
 				DM("rt: " << rt << std::endl
 				<< "at: " << at << std::endl);
 
-                auto t_preempt = possible_preemption(est, s, j);
-                DM("t_preempt: " << t_preempt << std::endl);
 
 				auto t_high = next_higher_prio_job_ready(s, j, at.min());
 				DM("t_high: " << t_high << std::endl);
 				Time lst    = std::min(t_wc,
 					t_high - Time_model::constants<Time>::epsilon());
 
+				auto t_preempt = possible_preemption(est,lst + j.get_cost().max(), s, j);
+				DM("t_preempt: " << t_preempt << std::endl);
 				// now lets see if the job can be preempted
-				if (t_preempt != Time_model::constants<Time>::infinity()) {
-					do {
-						auto cert_avail = s.number_of_certainly_available_cores(t_preempt);
-						auto poss_high = number_of_higher_priority(est, t_preempt, s, j);
-						if (cert_avail - 1 < poss_high) {
-							// the job can be preempted
-							lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
-							break;
-						} else {
-							// the job cannot be preempted
-							// we have to check the next possible preemption
-							DM("Job cannot be preempted -> look into the next preemption point" << std::endl);
-							t_preempt = possible_preemption(t_preempt, s, j);
-							DM("Next t_preempt: " << t_preempt << std::endl);
-						}
-					} while (t_preempt < lst + j.get_cost().max());
-				}
+//				if (t_preempt != Time_model::constants<Time>::infinity()) {
+//					do {
+//						auto cert_avail = s.number_of_certainly_available_cores(t_preempt);
+//						auto poss_high = number_of_higher_priority(est, t_preempt, s, j);
+//						if (cert_avail - 1 < poss_high) {
+//							// the job can be preempted
+//							lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
+//							break;
+//						} else {
+//							// the job cannot be preempted
+//							// we have to check the next possible preemption
+//							DM("Job cannot be preempted -> look into the next preemption point" << std::endl);
+//							t_preempt = possible_preemption(t_preempt, s, j);
+//							DM("Next t_preempt: " << t_preempt << std::endl);
+//						}
+//					} while (t_preempt < lst + j.get_cost().max());
+//				}
 
 				lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
 				preempt_time = t_preempt;
@@ -1100,6 +1100,15 @@ namespace NP {
 					States& exploration_front = states();
 					n = exploration_front.size();
 #endif
+					// update current completely scheduled jobs based on the minimum completed jobs in the states
+					auto min_jobs = std::numeric_limits<unsigned int>::max();
+					for (const State& s : exploration_front) {
+						min_jobs = std::min(min_jobs, s.number_of_scheduled_jobs());
+					}
+					current_job_count = min_jobs;
+
+					if (current_job_count == jobs.size())
+						break;
 
 					// allocate states space for next depth
 					states_storage.emplace_back();
@@ -1130,8 +1139,8 @@ namespace NP {
 						});
 
 #else
+
 					// select states with minimum scheduled jobs and explore them
-					unsigned int min_jobs = current_job_count;
 					std::vector<unsigned int> other_index;
 
 					// Move the states with scheduled jobs more than minimum to the next depth
@@ -1180,15 +1189,9 @@ namespace NP {
 					if (!be_naive)
 						states_by_key.clear();
 
-                    // update current completely scheduled jobs based on the minimum completed jobs in the states
-                    auto min_completed_jobs = std::numeric_limits<unsigned int>::max();
-                    for (const State& s : exploration_front) {
-                        min_completed_jobs = std::min(min_completed_jobs, s.number_of_scheduled_jobs());
-                    }
-					current_job_count = min_completed_jobs;
-
 					// print number of states
 					DM("Number of states: " << num_states << std::endl);
+//					std::cout << "states: " << num_states << ", width: " << other_index.size() << ", time: " << get_cpu_time() << std::endl;
 
 #ifdef CONFIG_PARALLEL
 					// propagate any updates to the response-time estimates
