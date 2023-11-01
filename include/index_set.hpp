@@ -7,26 +7,17 @@ namespace NP {
 		{
 			public:
 
-			typedef std::vector<bool> Set_type;
+			typedef std::vector<std::size_t> Set_type;
 
 			// new empty job set
 			Index_set() : the_set() {}
 
 			// derive a new set by "cloning" an existing set and adding an index
 			Index_set(const Index_set& from, std::size_t idx)
-			: the_set(std::max(from.the_set.size(), idx + 1))
+			: the_set(from.the_set)
 			{
-				std::copy(from.the_set.begin(), from.the_set.end(), the_set.begin());
-				the_set[idx] = true;
-			}
-
-			// create the diff of two job sets (intended for debugging only)
-			Index_set(const Index_set &a, const Index_set &b)
-			: the_set(std::max(a.the_set.size(), b.the_set.size()), true)
-			{
-				auto limit = std::min(a.the_set.size(), b.the_set.size());
-				for (unsigned int i = 0; i < limit; i++)
-					the_set[i] = a.contains(i) ^ b.contains(i);
+				the_set.push_back(idx);
+				std::sort(the_set.begin(), the_set.end());
 			}
 
 			bool operator==(const Index_set &other) const
@@ -41,7 +32,7 @@ namespace NP {
 
 			bool contains(std::size_t idx) const
 			{
-				return the_set.size() > idx && the_set[idx];
+				return std::find(the_set.begin(), the_set.end(), idx) != the_set.end();
 			}
 
 			bool includes(std::vector<std::size_t> indices) const
@@ -62,18 +53,13 @@ namespace NP {
 
 			std::size_t size() const
 			{
-				std::size_t count = 0;
-				for (auto x : the_set)
-					if (x)
-						count++;
-				return count;
+				return the_set.size();
 			}
 
 			void add(std::size_t idx)
 			{
-				if (idx >= the_set.size())
-					the_set.resize(idx + 1);
-				the_set[idx] = true;
+				the_set.push_back(idx);
+				std::sort(the_set.begin(), the_set.end());
 			}
 
 			friend std::ostream& operator<< (std::ostream& stream,
@@ -81,13 +67,12 @@ namespace NP {
 			{
 				bool first = true;
 				stream << "{";
-				for (auto i = 0; i < s.the_set.size(); i++)
-					if (s.the_set[i]) {
-						if (!first)
-							stream << ", ";
-						first = false;
-						stream << i;
-					}
+				for (auto i = 0; i < s.the_set.size(); i++) {
+					if (!first)
+						stream << ", ";
+					first = false;
+					stream << s.the_set[i];
+				}
 				stream << "}";
 
 				return stream;
