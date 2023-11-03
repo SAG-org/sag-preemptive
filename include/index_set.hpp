@@ -7,7 +7,7 @@ namespace NP {
 		{
 			public:
 
-			typedef std::vector<std::size_t> Set_type;
+			typedef std::set<std::size_t> Set_type;
 
 			// new empty job set
 			Index_set() : the_set() {}
@@ -16,8 +16,7 @@ namespace NP {
 			Index_set(const Index_set& from, std::size_t idx)
 			: the_set(from.the_set)
 			{
-				the_set.push_back(idx);
-				std::sort(the_set.begin(), the_set.end());
+				the_set.insert(idx);
 			}
 
 			bool operator==(const Index_set &other) const
@@ -32,7 +31,7 @@ namespace NP {
 
 			bool contains(std::size_t idx) const
 			{
-				return std::find(the_set.begin(), the_set.end(), idx) != the_set.end();
+				return the_set.find(idx) != the_set.end();
 			}
 
 			bool includes(std::vector<std::size_t> indices) const
@@ -58,8 +57,7 @@ namespace NP {
 
 			void add(std::size_t idx)
 			{
-				the_set.push_back(idx);
-				std::sort(the_set.begin(), the_set.end());
+				the_set.insert(idx);
 			}
 
 			friend std::ostream& operator<< (std::ostream& stream,
@@ -67,11 +65,11 @@ namespace NP {
 			{
 				bool first = true;
 				stream << "{";
-				for (auto i = 0; i < s.the_set.size(); i++) {
+				for (std::size_t i : s.the_set) {
 					if (!first)
 						stream << ", ";
 					first = false;
-					stream << s.the_set[i];
+					stream << i;
 				}
 				stream << "}";
 
