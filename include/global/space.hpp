@@ -880,7 +880,7 @@ namespace NP {
 //					} while (t_preempt < lst + j.get_cost().max());
 //				}
 
-				lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
+//				lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
 				preempt_time = t_preempt;
 				t_high_time = t_high;
 
@@ -899,8 +899,8 @@ namespace NP {
 				if (_st.first > _st.second)
 					return false; // nope
 				// check if it can also start execution after the possible preemption point
-//				if(t_preempt < _st.second)
-//					return false; // nope
+				if(t_preempt < _st.second)
+					return false; // nope
 
 				Interval<Time> st{_st};
 
@@ -1077,7 +1077,7 @@ namespace NP {
 					}
 #else
 					States& exploration_front = states();
-					n = exploration_front.size();
+//					n = exploration_front.size();
 #endif
 					// update current completely scheduled jobs based on the minimum completed jobs in the states
 					auto min_jobs = std::numeric_limits<unsigned int>::max();
@@ -1092,10 +1092,7 @@ namespace NP {
 					// allocate states space for next depth
 					states_storage.emplace_back();
 
-					// keep track of exploration front width
-					width = std::max(width, n);
 
-					num_states += n;
 
 					check_depth_abort();
 					check_cpu_timeout();
@@ -1131,7 +1128,6 @@ namespace NP {
 							// copy to next depth
 							states().push_back(std::move(s));
 							cache_state(&(*(--states().end())));
-							num_states--;
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 							// change the state pointer in the edges
 							for (auto& e : edges) {
@@ -1154,6 +1150,12 @@ namespace NP {
 						if (aborted)
 							break;
 					}
+
+					n = other_index.size();
+					// keep track of exploration front width
+					width = std::max(width, n);
+
+					num_states += n;
 
 
 //					for (const State& s : exploration_front) {
