@@ -836,6 +836,18 @@ namespace NP {
 					}
 				}
 
+				auto preempted_jobs = s.get_preempted_jobs();
+				for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
+					const Job<Time>& jp = jobs[std::get<0>(*it)];
+
+					// check this finish time if it is in the interval
+					if (std::get<2>(*it).min() >= st && std::get<2>(*it).min() <= en) {
+						if (jp.higher_priority_than(j)) {
+							number_of_higher_priority++;
+						}
+					}
+				}
+
 				return number_of_higher_priority;
 			}
 
@@ -874,7 +886,7 @@ namespace NP {
 //							// the job cannot be preempted
 //							// we have to check the next possible preemption
 //							DM("Job cannot be preempted -> look into the next preemption point" << std::endl);
-//							t_preempt = possible_preemption(t_preempt, s, j);
+//							t_preempt = possible_preemption(t_preempt, t_preempt + j.get_cost().max(), s, j);
 //							DM("Next t_preempt: " << t_preempt << std::endl);
 //						}
 //					} while (t_preempt < lst + j.get_cost().max());
@@ -938,9 +950,9 @@ namespace NP {
                     // expand the graph, merging if possible
                     const State& next = be_naive ?
                                         new_state(s, index_of(j), predecessors_of(j),
-                                                  st, ftimes, remaining) :
+                                                  st, ftimes, remaining, j.get_key()) :
                                         new_or_merged_state(s, index_of(j), predecessors_of(j),
-                                                            st, ftimes, remaining);
+                                                            st, ftimes, remaining, j.get_key());
                     // make sure we didn't skip any jobs
 //                    check_for_deadline_misses(s, next);
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH

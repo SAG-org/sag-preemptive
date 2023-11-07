@@ -43,8 +43,11 @@ namespace NP {
 				: num_jobs_scheduled(from.num_jobs_scheduled + 1)
 				, scheduled_jobs{ from.scheduled_jobs, j }
                 , preempted_jobs_tuple(from.preempted_jobs_tuple)
-				, lookup_key{ from.lookup_key ^ key }
+				, lookup_key{ from.lookup_key}
 			{
+				// if it is not in the preempted jobs of previous state, update lookup key
+				if (!from.job_preempted(j))
+					lookup_key ^= key;
 				auto est = start_times.min();
 				auto lst = start_times.max();
 				auto eft = finish_times.min();
@@ -128,11 +131,14 @@ namespace NP {
                     const Job_precedence_set& predecessors,
                     Interval<Time> start_times,
                     Interval<Time> finish_times,
-                    Interval<Time> remaining_times)
+                    Interval<Time> remaining_times,
+					hash_value_t key)
                     : num_jobs_scheduled(from.num_jobs_scheduled)
                     , scheduled_jobs(from.scheduled_jobs)
                     , lookup_key(from.lookup_key)
             {
+				if (!from.job_preempted(j))
+					lookup_key ^= key;
                 auto est = start_times.min();
                 auto lst = start_times.max();
                 auto eft = finish_times.min();
@@ -555,7 +561,8 @@ namespace NP {
 			// system availability intervals
 			std::vector<Interval<Time>> core_avail;
 
-			const hash_value_t lookup_key;
+//			const hash_value_t lookup_key;
+			hash_value_t lookup_key;
 
 			// no accidental copies
 //			Schedule_state(const Schedule_state& origin)  = delete;
