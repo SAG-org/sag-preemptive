@@ -206,7 +206,7 @@ namespace NP {
 			typedef tbb::concurrent_hash_map<hash_value_t, State_refs> States_map;
 			typedef typename States_map::accessor States_map_accessor;
 #else
-			typedef std::unordered_map<hash_value_t, State_refs> States_map;
+			typedef std::unordered_map<std::pair<hash_value_t,hash_value_t>, State_refs> States_map;
 #endif
 
 			typedef const Job<Time>* Job_ref;
@@ -485,7 +485,7 @@ namespace NP {
 
 				while (true) {
 					// check if key exists
-					if (states_by_key.find(acc, s->get_key())) {
+					if (states_by_key.find(acc, s->get_complete_key())) {
 						for (State_ref other : acc->second) {
 							if(other->try_to_dominate(*s))
 								return other;
@@ -497,7 +497,7 @@ namespace NP {
 						insert_cache_state(acc, s);
 						return s;
 					// otherwise, key doesn't exist yet, let's try to create it
-					} else if (states_by_key.insert(acc, s->get_key())) {
+					} else if (states_by_key.insert(acc, s->get_complete_key())) {
 						// We created the list, so go ahead and insert our state.
 						insert_cache_state(acc, s);
 						return s;
@@ -512,7 +512,7 @@ namespace NP {
 			{
 				// create a new list if needed, or lookup if already existing
 				auto res = states_by_key.emplace(
-					std::make_pair(s->get_key(), State_refs()));
+					std::make_pair(s->get_complete_key(), State_refs()));
 
 				auto pair_it = res.first;
 				State_refs& list = pair_it->second;
@@ -525,7 +525,7 @@ namespace NP {
 			{
 				State& s = *s_ref;
 
-				const auto pair_it = states_by_key.find(s.get_key());
+				const auto pair_it = states_by_key.find(s.get_complete_key());
 
 				// cannot merge if key doesn't exist
 				if (pair_it != states_by_key.end())

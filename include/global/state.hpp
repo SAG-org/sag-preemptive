@@ -27,6 +27,7 @@ namespace NP {
 			, num_jobs_scheduled(0)
 			, core_avail{num_processors, Interval<Time>(Time(0), Time(0))}
 			, lookup_key{0x9a9a9a9a9a9a9a9aUL}
+			, lookup_pr_key{0x9a9a9a9a9a9a9a9aUL}
 			{
 				assert(core_avail.size() > 0);
 			}
@@ -43,11 +44,12 @@ namespace NP {
 				: num_jobs_scheduled(from.num_jobs_scheduled + 1)
 				, scheduled_jobs{ from.scheduled_jobs, j }
                 , preempted_jobs_tuple(from.preempted_jobs_tuple)
-				, lookup_key{ from.lookup_key}
+				, lookup_key{ from.lookup_key ^ j}
+				, lookup_pr_key{ from.lookup_pr_key }
 			{
-				// if it is not in the preempted jobs of previous state, update lookup key
-				if (!from.job_preempted(j))
-					lookup_key ^= key;
+				// if it is in the preempted jobs of previous state, update lookup key
+				if (from.job_preempted(j))
+					lookup_pr_key ^= key;
 				auto est = start_times.min();
 				auto lst = start_times.max();
 				auto eft = finish_times.min();
@@ -136,9 +138,10 @@ namespace NP {
                     : num_jobs_scheduled(from.num_jobs_scheduled)
                     , scheduled_jobs(from.scheduled_jobs)
                     , lookup_key(from.lookup_key)
+					, lookup_pr_key(from.lookup_pr_key)
             {
 				if (!from.job_preempted(j))
-					lookup_key ^= key;
+					lookup_pr_key ^= key;
                 auto est = start_times.min();
                 auto lst = start_times.max();
                 auto eft = finish_times.min();
@@ -239,6 +242,16 @@ namespace NP {
 				return lookup_key;
 			}
 
+			hash_value_t get_pr_key() const
+			{
+				return lookup_pr_key;
+			}
+
+			std::pair<hash_value_t, hash_value_t> get_complete_key() const
+			{
+				return std::make_pair(lookup_key, lookup_pr_key);
+			}
+
 			bool same_jobs_scheduled(const Schedule_state &other) const
 			{
 				return scheduled_jobs == other.scheduled_jobs;
@@ -264,6 +277,8 @@ namespace NP {
 				assert(core_avail.size() == other.core_avail.size());
 
 				if (get_key() != other.get_key())
+					return false;
+				if (get_pr_key() != other.get_pr_key())
 					return false;
 				if (!same_jobs_scheduled(other))
 					return false;
@@ -561,8 +576,8 @@ namespace NP {
 			// system availability intervals
 			std::vector<Interval<Time>> core_avail;
 
-//			const hash_value_t lookup_key;
-			hash_value_t lookup_key;
+			const hash_value_t lookup_key;
+			hash_value_t lookup_pr_key;
 
 			// no accidental copies
 //			Schedule_state(const Schedule_state& origin)  = delete;
