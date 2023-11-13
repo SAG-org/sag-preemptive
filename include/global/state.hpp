@@ -25,6 +25,7 @@ namespace NP {
 			Schedule_state(unsigned int num_processors)
 			: scheduled_jobs()
 			, num_jobs_scheduled(0)
+			, num_dispatched_segments(0)
 			, core_avail{num_processors, Interval<Time>(Time(0), Time(0))}
 			, lookup_key{0x9a9a9a9a9a9a9a9aUL}
 			, lookup_pr_key{0x9a9a9a9a9a9a9a9aUL}
@@ -42,6 +43,7 @@ namespace NP {
 				Interval<Time> finish_times,
 				hash_value_t key)
 				: num_jobs_scheduled(from.num_jobs_scheduled + 1)
+				, num_dispatched_segments(from.num_dispatched_segments )
 				, scheduled_jobs{ from.scheduled_jobs, j }
                 , preempted_jobs_tuple(from.preempted_jobs_tuple)
 				, lookup_key{ from.lookup_key ^ j}
@@ -136,6 +138,7 @@ namespace NP {
                     Interval<Time> remaining_times,
 					hash_value_t key)
                     : num_jobs_scheduled(from.num_jobs_scheduled)
+					, num_dispatched_segments(from.num_dispatched_segments + 1)
                     , scheduled_jobs(from.scheduled_jobs)
                     , lookup_key(from.lookup_key)
 					, lookup_pr_key(from.lookup_pr_key)
@@ -298,8 +301,8 @@ namespace NP {
 				auto jt = other.preempted_jobs_tuple.begin();
 				for (auto it = preempted_jobs_tuple.begin(); it != preempted_jobs_tuple.end(); it++) {
 					// since the jobs are sorted, we can stop if we find a job that is not in the other state
-					if (!std::get<1>(*it).intersects(std::get<1>(*jt)))
-						return false;
+//					if (!std::get<1>(*it).intersects(std::get<1>(*jt)))
+//						return false;
 					// check if the finish times intersect
 					if (!std::get<2>(*it).intersects(std::get<2>(*jt)))
 						return false;
@@ -436,6 +439,11 @@ namespace NP {
 				return num_jobs_scheduled;
 			}
 
+			const unsigned int number_of_dispatched_segments() const
+			{
+				return num_dispatched_segments;
+			}
+
 			Interval<Time> core_availability() const
 			{
 				assert(core_avail.size() > 0);
@@ -562,6 +570,7 @@ namespace NP {
 			private:
 
 			const unsigned int num_jobs_scheduled;
+			const unsigned int num_dispatched_segments;
 
 			// set of jobs that have been dispatched (may still be running)
 			const Index_set scheduled_jobs;

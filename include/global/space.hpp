@@ -892,7 +892,7 @@ namespace NP {
 //					} while (t_preempt < lst + j.get_cost().max());
 //				}
 
-//				lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
+				lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
 				preempt_time = t_preempt;
 				t_high_time = t_high;
 
@@ -911,8 +911,8 @@ namespace NP {
 				if (_st.first > _st.second)
 					return false; // nope
 				// check if it can also start execution after the possible preemption point
-				if(t_preempt < _st.second)
-					return false; // nope
+//				if(t_preempt < _st.second)
+//					return false; // nope
 
 				Interval<Time> st{_st};
 
