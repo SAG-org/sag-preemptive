@@ -865,13 +865,19 @@ namespace NP {
 				DM("rt: " << rt << std::endl
 				<< "at: " << at << std::endl);
 
+				Time t_preempt = Time_model::constants<Time>::infinity();
+
 
 				auto t_high = next_higher_prio_job_ready(s, j, at.min());
 				DM("t_high: " << t_high << std::endl);
 				Time lst    = std::min(t_wc,
 					t_high - Time_model::constants<Time>::epsilon());
 
-				auto t_preempt = possible_preemption(est,lst + j.get_cost().max(), s, j);
+				// if there is a chance that the job can be dispatched,
+				// we calculate the possible preemption point
+				if (est <= lst)
+					t_preempt = possible_preemption(est,lst + j.get_cost().max(), s, j);
+
 				DM("t_preempt: " << t_preempt << std::endl);
 				// now lets see if the job can be preempted
 //				if (t_preempt != Time_model::constants<Time>::infinity()) {
