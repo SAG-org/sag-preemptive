@@ -203,7 +203,7 @@ namespace NP {
 			typedef typename std::forward_list<State_ref> State_refs;
 
 #ifdef CONFIG_PARALLEL
-			typedef tbb::concurrent_hash_map<hash_value_t, State_refs> States_map;
+			typedef tbb::concurrent_hash_map<std::pair<hash_value_t,hash_value_t>, State_refs> States_map;
 			typedef typename States_map::accessor States_map_accessor;
 #else
 			typedef std::unordered_map<std::pair<hash_value_t,hash_value_t>, State_refs> States_map;
@@ -476,6 +476,15 @@ namespace NP {
 
 				State_refs& list = acc->second;
 				list.push_front(s);
+			}
+
+			void insert_cache_state( State_ref s){
+				States_map_accessor acc;
+				if (states_by_key.find(acc, s->get_complete_key())) {
+					insert_cache_state(acc, s);
+				}else{
+					assert(false);
+				}
 			}
 
 			// returns true if state was merged
@@ -1081,28 +1090,33 @@ namespace NP {
 				explore();
 			}
 
-			void explore()
-			{
+			void explore() {
 				make_initial_state();
 
 				while (current_job_count < jobs.size()) {
-					unsigned long n;
+					unsigned long n = 0;
 #ifdef CONFIG_PARALLEL
 					const auto& new_states_part = states_storage.back();
-					n = 0;
+					unsigned int min_jobs = std::numeric_limits<unsigned int>::max();
 					for (const States& new_states : new_states_part) {
-						n += new_states.size();
+						for (unsigned int i = 0; i < new_states.size(); i++) {
+							const State &s = new_states[i];
+							min_jobs = std::min(min_jobs, s.number_of_scheduled_jobs());
+						}
 					}
+
+					// update current completely scheduled jobs based on the minimum completed jobs in the states
+					current_job_count = min_jobs;
 #else
-					States& exploration_front = states();
+					States &exploration_front = states();
 //					n = exploration_front.size();
-#endif
 					// update current completely scheduled jobs based on the minimum completed jobs in the states
 					auto min_jobs = std::numeric_limits<unsigned int>::max();
-					for (const State& s : exploration_front) {
+					for (const State &s: exploration_front) {
 						min_jobs = std::min(min_jobs, s.number_of_scheduled_jobs());
 					}
 					current_job_count = min_jobs;
+#endif
 
 					if (current_job_count == jobs.size())
 						break;
@@ -1111,14 +1125,33 @@ namespace NP {
 					states_storage.emplace_back();
 
 
-
 					check_depth_abort();
 					check_cpu_timeout();
 					if (aborted)
 						break;
 
 #ifdef CONFIG_PARALLEL
+					// select states with minimum scheduled jobs and explore them
+//					std::vector<unsigned int> other_index;
+					for (const States& new_states : new_states_part) {
+						for (unsigned int i = 0; i < new_states.size(); i++) {
+							const State &s = new_states[i];
+							unsigned int njobs = s.number_of_scheduled_jobs();
+							if (njobs != current_job_count) {
+								// copy to next depth
+								states().push_back(std::move(s));
+//								cache_state(&(*(--states().end())));
+								insert_cache_state(&(*(--states().end())));
+							}
+						}
+					}
+						// then, explore the states with minimum scheduled jobs in parallel
 
+					// make a local copy of the number of explored states and initialize it to 0
+					tbb::enumerable_thread_specific<unsigned long> partial_n;
+					for (auto& ni: partial_n){
+						ni = 0;
+					}
 					parallel_for(new_states_part.range(),
 						[&] (typename Split_states::const_range_type& r) {
 							for (auto it = r.begin(); it != r.end(); it++) {
@@ -1127,17 +1160,30 @@ namespace NP {
 								tbb::parallel_for(tbb::blocked_range<size_t>(0, s),
 									[&] (const tbb::blocked_range<size_t>& r) {
 										for (size_t i = r.begin(); i != r.end(); i++)
-											explore(new_states[i]);
+											if (new_states[i].number_of_scheduled_jobs() == current_job_count){
+												explore(new_states[i]);
+												partial_n.local()++;
+											}
+//											explore(new_states[i]);
 								});
 							}
 						});
+
+					// get the number of states explored
+					for (auto ni: partial_n){
+						n+=ni;
+					}
+					// keep track of exploration front width
+					width = std::max(width, n);
+
+					num_states += n;
 
 #else
 
 					// select states with minimum scheduled jobs and explore them
 					std::vector<unsigned int> other_index;
 
-					// Move the states with scheduled jobs more than minimum to the next depth
+					// Move the states with scheduled jobs more than the minimum to the next depth
 					// and keep the rest state index in other_index for later exploration
 					for (unsigned int i = 0; i < exploration_front.size(); i++) {
 						State& s = exploration_front[i];
