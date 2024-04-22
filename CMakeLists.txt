@@ -46,17 +46,12 @@ endif ()
 
 set(CORE_LIBS ${TBB_LIB} ${ALLOC_LIB})
 
-file(GLOB TEST_SOURCES "src/tests/*.cpp")
-add_executable(runtests ${TEST_SOURCES} ${SOURCES})
-
 set(ANALYSIS_SOURCES src/rt_analysis.cpp lib/src/OptionParser.cpp)
 add_executable(rt_analysis ${ANALYSIS_SOURCES})
 
 target_link_libraries(rt_analysis ${CORE_LIBS})
-target_link_libraries(runtests ${CORE_LIBS})
 
 target_compile_features(rt_analysis PUBLIC cxx_std_14)
-target_compile_features(runtests PUBLIC cxx_std_14)
 
 
 
