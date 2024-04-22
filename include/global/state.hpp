@@ -283,9 +283,7 @@ namespace PREEMPTIVE {
 				// check for intersection of remaining execution times and finish times of preempted jobs
 				auto jt = other.preempted_jobs_tuple.begin();
 				for (auto it = preempted_jobs_tuple.begin(); it != preempted_jobs_tuple.end(); it++) {
-					// since the jobs are sorted, we can stop if we find a job that is not in the other state
-//					if (!std::get<1>(*it).intersects(std::get<1>(*jt)))
-//						return false;
+					// since the jobs are sorted, we can stop if we find a job not in the other state
 					// check if the finish times intersect
 					if (!std::get<2>(*it).intersects(std::get<2>(*jt)))
 						return false;

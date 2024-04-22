@@ -457,15 +457,6 @@ namespace PREEMPTIVE {
 				list.push_front(s);
 			}
 
-			void insert_cache_state(State_ref s) {
-				States_map_accessor acc;
-				if (states_by_key.find(acc, s->get_complete_key())) {
-					insert_cache_state(acc, s);
-				} else {
-					assert(false);
-				}
-			}
-
 			// returns true if state was merged
 			State_ref merge_or_cache(State_ref s) {
 				States_map_accessor acc;
@@ -474,10 +465,13 @@ namespace PREEMPTIVE {
 					// check if key exists
 					if (states_by_key.find(acc, s->get_complete_key())) {
 						for (State_ref other: acc->second) {
-							if (other->try_to_dominate(*s))
-								return other;
-							else if (other->try_to_merge(*s))
-								return other;
+							if (other->check_reduction_rule(*s)) {
+//								if (other->try_to_dominate(*s))
+//									return other;
+//								else
+								if (other->try_to_merge(*s))
+									return other;
+							}
 						}
 						// If we reach here, we failed to dominate or merge, so go ahead
 						// and insert it.
@@ -516,9 +510,10 @@ namespace PREEMPTIVE {
 				if (pair_it != states_by_key.end())
 					for (State_ref other: pair_it->second) {
 						if (other->check_reduction_rule(*s_ref)) {
-							if (other->try_to_dominate(*s_ref))
-								return other;
-							else if (other->try_to_merge(*s_ref))
+//							if (other->try_to_dominate(*s_ref))
+//								return other;
+//							else
+							if (other->try_to_merge(*s_ref))
 								return other;
 						}
 					}
@@ -613,7 +608,7 @@ namespace PREEMPTIVE {
 				return std::max(rt.max(), earliest_ref_ready);
 			}
 
-			// Find next time by which any job is certainly released.
+			// Find the next time by which any job is certainly released.
 			// Note that this time may be in the past.
 			Time next_higher_prio_job_ready(
 					const State &s,
@@ -1090,22 +1085,20 @@ namespace PREEMPTIVE {
 						break;
 
 #ifdef CONFIG_PARALLEL
-					// select states with minimum scheduled jobs and explore them
-//					std::vector<unsigned int> other_index;
+					// move states that do not have the minimum number of scheduled jobs to the next depth
 					for (const States &new_states: new_states_part) {
 						for (unsigned int i = 0; i < new_states.size(); i++) {
-							const State &s = new_states[i];
-							unsigned int njobs = s.number_of_scheduled_jobs();
-							if (njobs != current_job_count) {
+							auto &s = new_states[i];
+							if (s.number_of_scheduled_jobs() != current_job_count) {
 								// copy to next depth
 								states().push_back(std::move(s));
-//								cache_state(&(*(--states().end())));
-								insert_cache_state(&(*(--states().end())));
+//								insert_cache_state(&(*(--states().end())));
+								merge_or_cache(&(*(--states().end())));
 							}
 						}
 					}
 
-					// then, explore the states with minimum scheduled jobs in parallel
+					// then, explore the states with minimum scheduled jobs in parallel,
 					// make a local copy of the number of explored states and initialize it to 0
 					tbb::enumerable_thread_specific<unsigned long> partial_n;
 					for (auto &ni: partial_n) {
@@ -1140,18 +1133,14 @@ namespace PREEMPTIVE {
 
 #else
 
-					// select states with minimum scheduled jobs and explore them
-					std::vector<unsigned int> other_index;
-
 					// Move the states with scheduled jobs more than the minimum to the next depth
 					// and keep the rest state index in other_index for later exploration
 					for (unsigned int i = 0; i < exploration_front.size(); i++) {
 						State &s = exploration_front[i];
-						unsigned int njobs = s.number_of_scheduled_jobs();
-						if (njobs != min_jobs) {
+						if (s.number_of_scheduled_jobs() != current_job_count) {
 							// copy to next depth
 							states().push_back(std::move(s));
-							cache_state(&(*(--states().end())));
+							merge_or_cache(&(*(--states().end())));
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 							// change the state pointer in the edges
 							for (auto& e : edges) {
@@ -1161,20 +1150,21 @@ namespace PREEMPTIVE {
 									e.target = &states().back();
 							}
 #endif
-						} else
-							other_index.push_back(i);
+						}
 					}
 
 					// then, explore the states with minimum scheduled jobs
-					for (auto i: other_index) {
+					for (unsigned int i = 0; i < exploration_front.size(); i++) {
 						State &s = exploration_front[i];
-						explore(s);
-						check_cpu_timeout();
-						if (aborted)
-							break;
+						if (s.number_of_scheduled_jobs() ==	current_job_count) {
+							explore(s);
+							n++;
+							check_cpu_timeout();
+							if (aborted)
+								break;
+						}
 					}
 
-					n = other_index.size();
 					// keep track of exploration front width
 					width = std::max(width, n);
 
@@ -1188,7 +1178,8 @@ namespace PREEMPTIVE {
 
 					// print number of states
 					DM("Number of states: " << num_states << std::endl);
-//					std::cout << "states: " << num_states << ", width: " << other_index.size() << ", time: " << get_cpu_time() << std::endl;
+//					std::cout << "states: " << num_states << ", width: " << width << ", time: " << get_cpu_time() << std::endl;
+//					std::cout << "states: " << num_states << ", width: " << width << std::endl;
 
 #ifdef CONFIG_PARALLEL
 					// propagate any updates to the response-time estimates
