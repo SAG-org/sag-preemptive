@@ -75,13 +75,9 @@ namespace PREEMPTIVE {
 				return explore(p, o);
 			}
 
-			Interval<Time> get_finish_times(const Job<Time> &j) const {
-				auto rbounds = rta.find(j.get_id());
-				if (rbounds == rta.end()) {
-					return Interval<Time>{0, Time_model::constants<Time>::infinity()};
-				} else {
-					return rbounds->second;
-				}
+			Interval<Time> get_finish_times(const Job<Time>& j) const
+			{
+				return Interval<Time>{rta[index_of(j)]};
 			}
 
 			bool is_schedulable() const {
@@ -114,7 +110,7 @@ namespace PREEMPTIVE {
 			typedef tbb::enumerable_thread_specific<States> Split_states;
 			typedef std::deque<Split_states> States_storage;
 #else
-			typedef std::deque< States > States_storage;
+			typedef std::deque<States> States_storage;
 #endif
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
@@ -198,7 +194,7 @@ namespace PREEMPTIVE {
 			typedef tbb::concurrent_hash_map<std::pair<hash_value_t, hash_value_t>, State_refs> States_map;
 			typedef typename States_map::accessor States_map_accessor;
 #else
-			typedef std::unordered_map<std::pair<hash_value_t,hash_value_t>, State_refs> States_map;
+			typedef std::unordered_map<std::pair<hash_value_t, hash_value_t>, State_refs> States_map;
 #endif
 
 			typedef const Job<Time> *Job_ref;
@@ -208,7 +204,8 @@ namespace PREEMPTIVE {
 
 			typedef Interval_lookup_table<Time, Job<Time>, Job<Time>::scheduling_window> Jobs_lut;
 
-			typedef std::unordered_map<JobID, Interval<Time> > Response_times;
+			// NOTE: we don't use Interval<Time> here because the Interval sorts its arguments.
+			typedef std::vector<std::pair<Time, Time>> Response_times;
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 			std::deque<Edge> edges;
@@ -271,7 +268,12 @@ namespace PREEMPTIVE {
 					  width(0), current_job_count(0), num_cpus(num_cpus),
 					  jobs_by_latest_arrival(_jobs_by_latest_arrival),
 					  jobs_by_earliest_arrival(_jobs_by_earliest_arrival), jobs_by_deadline(_jobs_by_deadline),
-					  jobs_by_win(_jobs_by_win), _predecessors(jobs.size()), predecessors(_predecessors) {
+					  jobs_by_win(_jobs_by_win), _predecessors(jobs.size()), predecessors(_predecessors),
+					  rta(Response_times(jobs.size(), {Time_model::constants<Time>::infinity(), 0}))
+#ifdef CONFIG_PARALLEL
+			, partial_rta(Response_times(jobs.size(), {Time_model::constants<Time>::infinity(), 0}))
+#endif
+			{
 				for (const Job<Time> &j: jobs) {
 					_jobs_by_latest_arrival.insert({j.latest_arrival(), &j});
 					_jobs_by_earliest_arrival.insert({j.earliest_arrival(), &j});
@@ -303,20 +305,23 @@ namespace PREEMPTIVE {
 				return dl;
 			}
 
-			void update_finish_times(Response_times &r, const JobID &id,
+			void update_finish_times(Response_times &r, const Job_index index,
 									 Interval<Time> range) {
-				auto rbounds = r.find(id);
-				if (rbounds == r.end()) {
-					r.emplace(id, range);
-				} else {
-					rbounds->second |= range;
-				}
-				DM("RTA " << id << ": " << r.find(id)->second << std::endl);
+				r[index] = std::pair<Time, Time>{std::min(r[index].first, range.from()),
+												 std::max(r[index].second, range.upto())};
+				DM("RTA " << index << ": [" << r[index].first << ", " << r[index].second << "]" << std::endl);
+			}
+
+			void update_finish_times(Response_times &r, const Job_index index,
+									 std::pair<Time, Time> range) {
+				r[index] = std::pair<Time, Time>{std::min(r[index].first, range.first),
+												 std::max(r[index].second, range.second)};
+				DM("RTA " << index << ": [" << r[index].first << ", " << r[index].second << "]" << std::endl);
 			}
 
 			void update_finish_times(
 					Response_times &r, const Job<Time> &j, Interval<Time> range) {
-				update_finish_times(r, j.get_id(), range);
+				update_finish_times(r, index_of(j), range);
 				if (j.exceeds_deadline(range.upto())) {
 					DM("*** Deadline miss: " << j << std::endl);
 					aborted = true;
@@ -328,14 +333,24 @@ namespace PREEMPTIVE {
 #ifdef CONFIG_PARALLEL
 						partial_rta.local();
 #else
-				rta;
+						rta;
 #endif
 				update_finish_times(r, j, range);
 			}
 
 
 			std::size_t index_of(const Job<Time> &j) const {
-				return (std::size_t) (&j - &(jobs[0]));
+				// make sure that the job is part of the workload
+				// and catch the case where the job is not part of the workload,
+				// but the user tries to access it anyway
+				auto index = (std::size_t) (&j - &(jobs[0]));
+				try {
+					jobs.at(index);
+				} catch (std::out_of_range &e) {
+					std::cerr << "Job " << j << " not found in workload." << std::endl;
+					std::abort();
+				}
+				return index;
 			}
 
 			const Job_precedence_set &predecessors_of(const Job<Time> &j) const {
@@ -480,29 +495,27 @@ namespace PREEMPTIVE {
 
 #else
 
-			void cache_state(State_ref s)
-			{
+			void cache_state(State_ref s) {
 				// create a new list if needed, or lookup if already existing
 				auto res = states_by_key.emplace(
-					std::make_pair(s->get_complete_key(), State_refs()));
+						std::make_pair(s->get_complete_key(), State_refs()));
 
 				auto pair_it = res.first;
-				State_refs& list = pair_it->second;
+				State_refs &list = pair_it->second;
 
 				list.push_front(s);
 			}
 
 
-			State_ref merge_or_cache(State_ref s_ref)
-			{
-				State& s = *s_ref;
+			State_ref merge_or_cache(State_ref s_ref) {
+				State &s = *s_ref;
 
 				const auto pair_it = states_by_key.find(s.get_complete_key());
 
 				// cannot merge if key doesn't exist
 				if (pair_it != states_by_key.end())
-					for (State_ref other : pair_it->second) {
-						if(other->check_reduction_rule(*s_ref)) {
+					for (State_ref other: pair_it->second) {
+						if (other->check_reduction_rule(*s_ref)) {
 							if (other->try_to_dominate(*s_ref))
 								return other;
 							else if (other->try_to_merge(*s_ref))
@@ -513,6 +526,7 @@ namespace PREEMPTIVE {
 				cache_state(s_ref);
 				return s_ref;
 			}
+
 #endif
 
 			void check_cpu_timeout() {
@@ -1132,7 +1146,7 @@ namespace PREEMPTIVE {
 					// Move the states with scheduled jobs more than the minimum to the next depth
 					// and keep the rest state index in other_index for later exploration
 					for (unsigned int i = 0; i < exploration_front.size(); i++) {
-						State& s = exploration_front[i];
+						State &s = exploration_front[i];
 						unsigned int njobs = s.number_of_scheduled_jobs();
 						if (njobs != min_jobs) {
 							// copy to next depth
@@ -1147,14 +1161,13 @@ namespace PREEMPTIVE {
 									e.target = &states().back();
 							}
 #endif
-						}
-						else
+						} else
 							other_index.push_back(i);
 					}
 
 					// then, explore the states with minimum scheduled jobs
-					for (auto i : other_index) {
-						State& s = exploration_front[i];
+					for (auto i: other_index) {
+						State &s = exploration_front[i];
 						explore(s);
 						check_cpu_timeout();
 						if (aborted)
@@ -1179,9 +1192,10 @@ namespace PREEMPTIVE {
 
 #ifdef CONFIG_PARALLEL
 					// propagate any updates to the response-time estimates
-					for (auto &r: partial_rta)
-						for (const auto &elem: r)
-							update_finish_times(rta, elem.first, elem.second);
+					for (auto& r : partial_rta)
+						for (int i = 0; i < r.size(); ++i) {
+							update_finish_times(rta, i, r[i]);
+						}
 #endif
 
 #ifndef CONFIG_COLLECT_SCHEDULE_GRAPH
