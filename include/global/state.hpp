@@ -10,7 +10,7 @@
 #include "jobs.hpp"
 #include "cache.hpp"
 
-namespace NP {
+namespace PREEMPTIVE {
 
 	namespace Global {
 

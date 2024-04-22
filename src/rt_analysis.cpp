@@ -32,8 +32,6 @@
 // command line options
 static bool want_naive;
 static bool want_dense;
-static bool want_prm_iip;
-static bool want_cw_iip;
 
 static bool want_precedence = false;
 static std::string precedence_file;
@@ -77,14 +75,14 @@ static Analysis_result analyze(
 #endif
 
 	// Parse input files and create NP scheduling problem description
-	NP::Scheduling_problem<Time> problem{
-			NP::parse_file<Time>(in, want_worst_case),
-			NP::parse_dag_file(dag_in),
-			NP::parse_abort_file<Time>(aborts_in),
+	PREEMPTIVE::Scheduling_problem<Time> problem{
+			PREEMPTIVE::parse_file<Time>(in, want_worst_case),
+			PREEMPTIVE::parse_dag_file(dag_in),
+			PREEMPTIVE::parse_abort_file<Time>(aborts_in),
 			num_processors};
 
 	// Set common analysis options
-	NP::Analysis_options opts;
+	PREEMPTIVE::Analysis_options opts;
 	opts.timeout = timeout;
 	opts.max_depth = max_depth;
 	opts.early_exit = !continue_after_dl_miss;
@@ -137,9 +135,9 @@ static Analysis_result process_stream(
 		std::istream &dag_in,
 		std::istream &aborts_in) {
 	if (want_dense)
-		return analyze<dense_t, NP::Global::State_space<dense_t>>(in, dag_in, aborts_in);
+		return analyze<dense_t, PREEMPTIVE::Global::State_space<dense_t>>(in, dag_in, aborts_in);
 	else
-		return analyze<dtime_t, NP::Global::State_space<dtime_t>>(in, dag_in, aborts_in);
+		return analyze<dtime_t, PREEMPTIVE::Global::State_space<dtime_t>>(in, dag_in, aborts_in);
 }
 
 static void process_file(const std::string &fname) {
@@ -226,14 +224,14 @@ static void process_file(const std::string &fname) {
 			std::cerr << " + " << precedence_file;
 		std::cerr << ": parse error" << std::endl;
 		exit(1);
-	} catch (NP::InvalidJobReference &ex) {
+	} catch (PREEMPTIVE::InvalidJobReference &ex) {
 		std::cerr << precedence_file << ": bad job reference: job "
 				  << ex.ref.job << " of task " << ex.ref.task
 				  << " is not part of the job set given in "
 				  << fname
 				  << std::endl;
 		exit(3);
-	} catch (NP::InvalidAbortParameter &ex) {
+	} catch (PREEMPTIVE::InvalidAbortParameter &ex) {
 		std::cerr << aborts_file << ": invalid abort parameter: job "
 				  << ex.ref.job << " of task " << ex.ref.task
 				  << " has an impossible abort time (abort before release)"
@@ -282,10 +280,6 @@ int main(int argc, char **argv) {
 			.action("store_const").set_const("1")
 			.help("use the naive exploration method (default: merging)");
 
-	parser.add_option("-i", "--iip").dest("iip")
-			.choices({"none", "P-RM", "CW"}).set_default("none")
-			.help("the IIP to use (default: none)");
-
 	parser.add_option("-p", "--precedence").dest("precedence_file")
 			.help("name of the file that contains the job set's precedence DAG")
 			.set_default("");
@@ -324,7 +318,7 @@ int main(int argc, char **argv) {
 	parser.add_option("-w", "--worst")
 			.dest("want_worst_case").set_default("0")
 			.action("store_const").set_const("1")
-			.help("just consider the worst case scenario "
+			.help("just consider the worst-case execution times "
 				  "(default: off)");
 
 
@@ -332,10 +326,6 @@ int main(int argc, char **argv) {
 
 	const std::string &time_model = options.get("time_model");
 	want_dense = time_model == "dense";
-
-	const std::string &iip = options.get("iip");
-	want_prm_iip = iip == "P-RM";
-	want_cw_iip = iip == "CW";
 
 	want_naive = options.get("naive");
 

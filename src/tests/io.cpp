@@ -19,7 +19,7 @@ const std::string four_lines =
 TEST_CASE("[dense time] job parser") {
 	auto in = std::istringstream(one_line);
 
-	NP::Job<dense_t> j = NP::parse_job<dense_t>(in);
+	PREEMPTIVE::Job<dense_t> j = PREEMPTIVE::parse_job<dense_t>(in);
 
 	CHECK(j.get_job_id() == 6);
 	CHECK(j.get_priority() == 1);
@@ -29,13 +29,13 @@ TEST_CASE("[dense time] job parser") {
 TEST_CASE("[dense time] job parser exception") {
 	auto in = std::istringstream(bad_line);
 
-	REQUIRE_THROWS_AS(NP::parse_job<dense_t>(in), std::ios_base::failure);
+	REQUIRE_THROWS_AS(PREEMPTIVE::parse_job<dense_t>(in), std::ios_base::failure);
 }
 
 TEST_CASE("[dense time] file parser") {
 	auto in = std::istringstream(four_lines);
 
-	auto jobs = NP::parse_file<dense_t>(in);
+	auto jobs = PREEMPTIVE::parse_file<dense_t>(in);
 
 	CHECK(jobs.size() == 3);
 
@@ -60,7 +60,7 @@ TEST_CASE("[dense time] file parser") {
 TEST_CASE("[disc time] don't parse dense files") {
 	auto in = std::istringstream(four_lines);
 
-	REQUIRE_THROWS_AS(NP::parse_job<dtime_t>(in), std::ios_base::failure);
+	REQUIRE_THROWS_AS(PREEMPTIVE::parse_job<dtime_t>(in), std::ios_base::failure);
 }
 
 const std::string precedence_line = "1, 2, 3, 5";
@@ -71,7 +71,7 @@ const std::string bad_precedence_line2 = "1, 2, 3x, 5";
 TEST_CASE("[parser] JobID") {
 	auto in = std::istringstream(precedence_line);
 
-	auto id = NP::parse_job_id(in);
+	auto id = PREEMPTIVE::parse_job_id(in);
 
 	CHECK(id.job  == 2);
 	CHECK(id.task == 1);
@@ -80,7 +80,7 @@ TEST_CASE("[parser] JobID") {
 TEST_CASE("[parser] precedence constraint") {
 	auto in = std::istringstream(precedence_line);
 
-	auto c = NP::parse_precedence_constraint(in);
+	auto c = PREEMPTIVE::parse_precedence_constraint(in);
 
 	CHECK(c.first.job  == 2);
 	CHECK(c.first.task == 1);
@@ -91,13 +91,13 @@ TEST_CASE("[parser] precedence constraint") {
 TEST_CASE("[parser] too-short precedence constraint") {
 	auto in = std::istringstream(bad_precedence_line);
 
-	REQUIRE_THROWS_AS(NP::parse_precedence_constraint(in), std::ios_base::failure);
+	REQUIRE_THROWS_AS(PREEMPTIVE::parse_precedence_constraint(in), std::ios_base::failure);
 }
 
 TEST_CASE("[parser] invalid precedence constraint") {
 	auto in = std::istringstream(bad_precedence_line2);
 
-	REQUIRE_THROWS_AS(NP::parse_precedence_constraint(in), std::ios_base::failure);
+	REQUIRE_THROWS_AS(PREEMPTIVE::parse_precedence_constraint(in), std::ios_base::failure);
 }
 
 const std::string precedence_file =
@@ -109,7 +109,7 @@ const std::string precedence_file =
 TEST_CASE("[parser] precedence file") {
 	auto in = std::istringstream(precedence_file);
 
-	auto dag = NP::parse_dag_file(in);
+	auto dag = PREEMPTIVE::parse_dag_file(in);
 
 	CHECK(dag.size() == 3);
 	CHECK(dag[0].first.task  == 1);
@@ -130,12 +130,12 @@ TEST_CASE("[parser] precedence file") {
 
 TEST_CASE("[parser] invalid precedence reference") {
 	auto dag_in = std::istringstream(precedence_file);
-	auto dag = NP::parse_dag_file(dag_in);
+	auto dag = PREEMPTIVE::parse_dag_file(dag_in);
 
 	auto in = std::istringstream(four_lines);
-	auto jobs = NP::parse_file<dense_t>(in);
+	auto jobs = PREEMPTIVE::parse_file<dense_t>(in);
 
-	REQUIRE_THROWS_AS(NP::validate_prec_refs<dense_t>(dag, jobs), NP::InvalidJobReference);
+	REQUIRE_THROWS_AS(PREEMPTIVE::validate_prec_refs<dense_t>(dag, jobs), PREEMPTIVE::InvalidJobReference);
 }
 
 const std::string sequential_task_prec_file =
@@ -145,12 +145,12 @@ const std::string sequential_task_prec_file =
 
 TEST_CASE("[parser] valid precedence reference") {
 	auto dag_in = std::istringstream(sequential_task_prec_file);
-	auto dag = NP::parse_dag_file(dag_in);
+	auto dag = PREEMPTIVE::parse_dag_file(dag_in);
 
 	auto in = std::istringstream(four_lines);
-	auto jobs = NP::parse_file<dense_t>(in);
+	auto jobs = PREEMPTIVE::parse_file<dense_t>(in);
 
-	NP::validate_prec_refs<dense_t>(dag, jobs);
+	PREEMPTIVE::validate_prec_refs<dense_t>(dag, jobs);
 	// dummy check; real check is that previous line didn't throw an exception
 	CHECK(true);
 }

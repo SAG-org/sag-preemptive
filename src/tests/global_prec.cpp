@@ -64,37 +64,37 @@ const std::string ts3_edges =
 
 TEST_CASE("[global-prec] taskset-1") {
 	auto dag_in = std::istringstream(ts1_edges);
-	auto dag = NP::parse_dag_file(dag_in);
+	auto dag = PREEMPTIVE::parse_dag_file(dag_in);
 
 	auto in = std::istringstream(ts1_jobs);
-	auto jobs = NP::parse_file<dtime_t>(in);
+	auto jobs = PREEMPTIVE::parse_file<dtime_t>(in);
 
-	NP::Scheduling_problem<dtime_t> prob{jobs, dag};
-	NP::Analysis_options opts;
+	PREEMPTIVE::Scheduling_problem<dtime_t> prob{jobs, dag};
+	PREEMPTIVE::Analysis_options opts;
 
 	prob.num_processors = 2;
 	opts.be_naive = true;
-	auto nspace2 = NP::Global::State_space<dtime_t>::explore(prob, opts);
+	auto nspace2 = PREEMPTIVE::Global::State_space<dtime_t>::explore(prob, opts);
 
 	CHECK_FALSE(nspace2.is_schedulable());
 
 	opts.be_naive = false;
-	auto space2 = NP::Global::State_space<dtime_t>::explore(prob, opts);
+	auto space2 = PREEMPTIVE::Global::State_space<dtime_t>::explore(prob, opts);
 
 	CHECK_FALSE(space2.is_schedulable());
 
 	prob.num_processors = 3;
 	opts.be_naive = true;
-	auto nspace3 = NP::Global::State_space<dtime_t>::explore(prob, opts);
+	auto nspace3 = PREEMPTIVE::Global::State_space<dtime_t>::explore(prob, opts);
 
 	CHECK(nspace3.is_schedulable());
 
 	opts.be_naive = false;
-	auto space3 = NP::Global::State_space<dtime_t>::explore(prob, opts);
+	auto space3 = PREEMPTIVE::Global::State_space<dtime_t>::explore(prob, opts);
 
 	CHECK(space3.is_schedulable());
 
-	for (const NP::Job<dtime_t>& j : jobs) {
+	for (const PREEMPTIVE::Job<dtime_t>& j : jobs) {
 		CHECK(nspace3.get_finish_times(j) == space3.get_finish_times(j));
 		CHECK(nspace3.get_finish_times(j).from() != 0);
 	}
@@ -102,26 +102,26 @@ TEST_CASE("[global-prec] taskset-1") {
 
 TEST_CASE("[global-prec] taskset-2") {
 	auto dag_in = std::istringstream(ts2_edges);
-	auto dag = NP::parse_dag_file(dag_in);
+	auto dag = PREEMPTIVE::parse_dag_file(dag_in);
 
 	auto in = std::istringstream(ts2_jobs);
-	auto jobs = NP::parse_file<dtime_t>(in);
+	auto jobs = PREEMPTIVE::parse_file<dtime_t>(in);
 
-	NP::Scheduling_problem<dtime_t> prob{jobs, dag};
-	NP::Analysis_options opts;
+	PREEMPTIVE::Scheduling_problem<dtime_t> prob{jobs, dag};
+	PREEMPTIVE::Analysis_options opts;
 
 	prob.num_processors = 2;
 	opts.be_naive = true;
-	auto nspace2 = NP::Global::State_space<dtime_t>::explore(prob, opts);
+	auto nspace2 = PREEMPTIVE::Global::State_space<dtime_t>::explore(prob, opts);
 
 	CHECK(nspace2.is_schedulable());
 
 	opts.be_naive = false;
-	auto space2 = NP::Global::State_space<dtime_t>::explore(prob, opts);
+	auto space2 = PREEMPTIVE::Global::State_space<dtime_t>::explore(prob, opts);
 
 	CHECK(space2.is_schedulable());
 
-	for (const NP::Job<dtime_t>& j : jobs) {
+	for (const PREEMPTIVE::Job<dtime_t>& j : jobs) {
 		CHECK(nspace2.get_finish_times(j) == space2.get_finish_times(j));
 		if (j.least_cost() != 0)
 			CHECK(nspace2.get_finish_times(j).from() != 0);
@@ -129,16 +129,16 @@ TEST_CASE("[global-prec] taskset-2") {
 
 	prob.num_processors = 3;
 	opts.be_naive = true;
-	auto nspace3 = NP::Global::State_space<dtime_t>::explore(prob, opts);
+	auto nspace3 = PREEMPTIVE::Global::State_space<dtime_t>::explore(prob, opts);
 
 	CHECK(nspace3.is_schedulable());
 
 	opts.be_naive = false;
-	auto space3 = NP::Global::State_space<dtime_t>::explore(prob, opts);
+	auto space3 = PREEMPTIVE::Global::State_space<dtime_t>::explore(prob, opts);
 
 	CHECK(space3.is_schedulable());
 
-	for (const NP::Job<dtime_t>& j : jobs) {
+	for (const PREEMPTIVE::Job<dtime_t>& j : jobs) {
 		CHECK(nspace3.get_finish_times(j) == space3.get_finish_times(j));
 		if (j.least_cost() != 0)
 			CHECK(nspace3.get_finish_times(j).from() != 0);
@@ -147,17 +147,17 @@ TEST_CASE("[global-prec] taskset-2") {
 
 TEST_CASE("[global-prec] taskset-3") {
 	auto dag_in = std::istringstream(ts3_edges);
-	auto dag = NP::parse_dag_file(dag_in);
+	auto dag = PREEMPTIVE::parse_dag_file(dag_in);
 
 	auto in = std::istringstream(ts3_jobs);
-	auto jobs = NP::parse_file<dtime_t>(in);
+	auto jobs = PREEMPTIVE::parse_file<dtime_t>(in);
 
-	NP::Scheduling_problem<dtime_t> prob{jobs, dag};
-	NP::Analysis_options opts;
+	PREEMPTIVE::Scheduling_problem<dtime_t> prob{jobs, dag};
+	PREEMPTIVE::Analysis_options opts;
 
 	prob.num_processors = 1;
 	opts.be_naive = false;
-	auto space = NP::Global::State_space<dtime_t>::explore(prob, opts);
+	auto space = PREEMPTIVE::Global::State_space<dtime_t>::explore(prob, opts);
 
 	CHECK(space.is_schedulable());
 }

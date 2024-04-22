@@ -8,7 +8,7 @@
 #include "jobs.hpp"
 #include "uni/space.hpp"
 
-using namespace NP;
+using namespace PREEMPTIVE;
 
 static const auto inf = Time_model::constants<dtime_t>::infinity();
 
@@ -73,7 +73,7 @@ TEST_CASE("Interval LUT") {
 
 TEST_CASE("state space") {
 
-	NP::Uniproc::Schedule_state<dtime_t> s0;
+	PREEMPTIVE::Uniproc::Schedule_state<dtime_t> s0;
 
 	CHECK(s0.earliest_finish_time() == 0);
 	CHECK(s0.latest_finish_time() == 0);
@@ -118,8 +118,8 @@ TEST_CASE("bool vector assumptions") {
 
 TEST_CASE("[basic] index set")
 {
-	NP::Index_set empty;
-	NP::Index_set all;
+	PREEMPTIVE::Index_set empty;
+	PREEMPTIVE::Index_set all;
 
 	CHECK(empty.is_subset_of(all));
 	CHECK(empty.size() == 0);
@@ -134,7 +134,7 @@ TEST_CASE("[basic] index set")
 
 	CHECK(!all.is_subset_of(empty));
 
-	NP::Index_set some;
+	PREEMPTIVE::Index_set some;
 	some.add(10);
 	some.add(20);
 

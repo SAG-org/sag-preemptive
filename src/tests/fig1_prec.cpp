@@ -6,7 +6,7 @@
 #include "io.hpp"
 #include "uni/space.hpp"
 
-using namespace NP;
+using namespace PREEMPTIVE;
 
 
 const std::string fig1a_jobs_file =

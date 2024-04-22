@@ -8,7 +8,7 @@
 #include "uni/space.hpp"
 
 
-using namespace NP;
+using namespace PREEMPTIVE;
 
 
 // - basic semantics

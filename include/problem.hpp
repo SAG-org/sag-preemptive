@@ -5,7 +5,7 @@
 #include "precedence.hpp"
 #include "aborts.hpp"
 
-namespace NP {
+namespace PREEMPTIVE {
 
 	// Description of a non-preemptive scheduling problem
 	template<class Time>

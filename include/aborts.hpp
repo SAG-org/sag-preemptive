@@ -3,7 +3,7 @@
 
 #include "jobs.hpp"
 
-namespace NP {
+namespace PREEMPTIVE {
 
 	template<class Time>
 	class Abort_action {

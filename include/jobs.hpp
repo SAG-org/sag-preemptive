@@ -10,7 +10,7 @@
 #include "time.hpp"
 #include "interval.hpp"
 
-namespace NP {
+namespace PREEMPTIVE {
 
 	typedef std::size_t hash_value_t;
 
@@ -207,8 +207,8 @@ namespace NP {
 
 namespace std {
 	template<class T>
-	struct hash<NP::Job < T>> {
-	std::size_t operator()(NP::Job < T >
+	struct hash<PREEMPTIVE::Job < T>> {
+	std::size_t operator()(PREEMPTIVE::Job < T >
 	const& j) const {
 	return j.
 
@@ -217,8 +217,8 @@ namespace std {
 };
 
 template<>
-struct hash<NP::JobID> {
-	std::size_t operator()(NP::JobID const &id) const {
+struct hash<PREEMPTIVE::JobID> {
+	std::size_t operator()(PREEMPTIVE::JobID const &id) const {
 		hash<unsigned long> h;
 		return (h(id.job) << 4) ^ h(id.task);
 	}
