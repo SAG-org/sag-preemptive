@@ -124,14 +124,13 @@ namespace NP {
 		in >> prio;
 
 		if (want_worst_case) {
-//            arr_max = arr_min;
+//			arr_min = arr_max;
+//			arr_max = arr_min;
 			cost_min = cost_max;
+//			cost_min = 0;
 		}
 
 		in.exceptions(state_before);
-
-//		std::cout << "tid: " << tid << " jid: " << jid << " arr_min: " << arr_min << " arr_max: " << arr_max << " cost_min: " << cost_min << " cost_max: " << cost_max << " dl: " << dl << " prio: " << prio << std::endl;
-
 
 		return Job<Time>{jid, Interval<Time>{arr_min, arr_max},
 						 Interval<Time>{cost_min, cost_max}, dl, prio, tid};

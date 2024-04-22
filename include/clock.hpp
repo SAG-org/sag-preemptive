@@ -5,31 +5,28 @@
 
 class Processor_clock {
 
-	private:
+private:
 
 	clock_t accum = 0, start_time = 0;
 	bool running = false;
 
 	static constexpr double scale_to_seconds = 1.0 / (double) CLOCKS_PER_SEC;
 
-	public:
+public:
 
-	void start()
-	{
+	void start() {
 		running = true;
 		start_time = clock();
 	}
 
 
-	double stop()
-	{
+	double stop() {
 		auto delta = clock() - start_time;
 		if (running) {
 			accum += delta;
 			running = false;
 			return delta * scale_to_seconds;
-		}
-		else
+		} else
 			return 0;
 	}
 

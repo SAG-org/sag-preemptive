@@ -17,38 +17,31 @@ namespace NP {
 		typedef std::size_t Job_index;
 		typedef std::vector<Job_index> Job_precedence_set;
 
-		template<class Time> class Schedule_state
-		{
-			public:
+		template<class Time>
+		class Schedule_state {
+		public:
 
 			// initial state -- nothing yet has finished, nothing is running
 			Schedule_state(unsigned int num_processors)
-			: scheduled_jobs()
-			, num_jobs_scheduled(0)
-			, num_dispatched_segments(0)
-			, core_avail{num_processors, Interval<Time>(Time(0), Time(0))}
-			, lookup_key{0x9a9a9a9a9a9a9a9aUL}
-			, lookup_pr_key{0x9a9a9a9a9a9a9a9aUL}
-			{
+					: scheduled_jobs(), num_jobs_scheduled(0), num_dispatched_segments(0),
+					  core_avail{num_processors, Interval<Time>(Time(0), Time(0))}, lookup_key{0x9a9a9a9a9a9a9a9aUL},
+					  lookup_pr_key{0x9a9a9a9a9a9a9a9aUL} {
 				assert(core_avail.size() > 0);
 			}
 
 			// transition: new state by scheduling a job in an existing state,
 			//             by replacing a given running job.
 			Schedule_state(
-				const Schedule_state& from,
-				Job_index j,
-				const Job_precedence_set& predecessors,
-				Interval<Time> start_times,
-				Interval<Time> finish_times,
-				hash_value_t key)
-				: num_jobs_scheduled(from.num_jobs_scheduled + 1)
-				, num_dispatched_segments(from.num_dispatched_segments )
-				, scheduled_jobs{ from.scheduled_jobs, j }
-                , preempted_jobs_tuple(from.preempted_jobs_tuple)
-				, lookup_key{ from.lookup_key ^ j}
-				, lookup_pr_key{ from.lookup_pr_key }
-			{
+					const Schedule_state &from,
+					Job_index j,
+					const Job_precedence_set &predecessors,
+					Interval<Time> start_times,
+					Interval<Time> finish_times,
+					hash_value_t key)
+					: num_jobs_scheduled(from.num_jobs_scheduled + 1),
+					  num_dispatched_segments(from.num_dispatched_segments), scheduled_jobs{from.scheduled_jobs, j},
+					  preempted_jobs_tuple(from.preempted_jobs_tuple), lookup_key{from.lookup_key ^ j},
+					  lookup_pr_key{from.lookup_pr_key} {
 				// if it is in the preempted jobs of previous state, update lookup key
 				if (from.job_preempted(j))
 					lookup_pr_key ^= key;
@@ -58,9 +51,9 @@ namespace NP {
 				auto lft = finish_times.max();
 
 				DM("est: " << est << std::endl
-					<< "lst: " << lst << std::endl
-					<< "eft: " << eft << std::endl
-					<< "lft: " << lft << std::endl);
+						   << "lst: " << lst << std::endl
+						   << "eft: " << eft << std::endl
+						   << "lft: " << lft << std::endl);
 
 				int n_prec = 0;
 //				// update scheduled jobs
@@ -84,9 +77,11 @@ namespace NP {
 //				if (!added_j)
 //					certain_jobs.emplace_back(j, finish_times);
 
-                // if it is in the preempted jobs, remove it
+				// if it is in the preempted jobs, remove it
 				preempted_jobs_tuple.erase(std::remove_if(preempted_jobs_tuple.begin(), preempted_jobs_tuple.end(),
-														  [&](const std::tuple<Job_index, Interval<Time>, Interval<Time> >& rj) { return std::get<0>(rj) == j; }), preempted_jobs_tuple.end());
+														  [&](const std::tuple<Job_index, Interval<Time>, Interval<Time> > &rj) {
+															  return std::get<0>(rj) == j;
+														  }), preempted_jobs_tuple.end());
 
 				// update the cores availability intervals
 				std::vector<Time> ca, pa;
@@ -106,8 +101,7 @@ namespace NP {
 						pa.push_back(std::max(est, from.core_avail[i].min()));
 						ca.push_back(std::max(est, from.core_avail[i].max()));
 					}
-				}
-				else {
+				} else {
 					for (int i = 1; i < from.core_avail.size(); i++) {
 						pa.push_back(std::max(est, from.core_avail[i].min()));
 						ca.push_back(std::max(est, from.core_avail[i].max()));
@@ -127,37 +121,34 @@ namespace NP {
 				DM("*** new state: constructed " << *this << std::endl);
 			}
 
-            // transition: new state by scheduling a segment of a job in an existing state,
-            //             by replacing a given running segment.
-            Schedule_state(
-                    const Schedule_state& from,
-                    Job_index j,
-                    const Job_precedence_set& predecessors,
-                    Interval<Time> start_times,
-                    Interval<Time> finish_times,
-                    Interval<Time> remaining_times,
+			// transition: new state by scheduling a segment of a job in an existing state,
+			//             by replacing a given running segment.
+			Schedule_state(
+					const Schedule_state &from,
+					Job_index j,
+					const Job_precedence_set &predecessors,
+					Interval<Time> start_times,
+					Interval<Time> finish_times,
+					Interval<Time> remaining_times,
 					hash_value_t key)
-                    : num_jobs_scheduled(from.num_jobs_scheduled)
-					, num_dispatched_segments(from.num_dispatched_segments + 1)
-                    , scheduled_jobs(from.scheduled_jobs)
-                    , lookup_key(from.lookup_key)
-					, lookup_pr_key(from.lookup_pr_key)
-            {
+					: num_jobs_scheduled(from.num_jobs_scheduled),
+					  num_dispatched_segments(from.num_dispatched_segments + 1), scheduled_jobs(from.scheduled_jobs),
+					  lookup_key(from.lookup_key), lookup_pr_key(from.lookup_pr_key) {
 				if (!from.job_preempted(j))
 					lookup_pr_key ^= key;
-                auto est = start_times.min();
-                auto lst = start_times.max();
-                auto eft = finish_times.min();
-                auto lft = finish_times.max();
+				auto est = start_times.min();
+				auto lst = start_times.max();
+				auto eft = finish_times.min();
+				auto lft = finish_times.max();
 
-                DM("est: " << est << std::endl
-                           << "lst: " << lst << std::endl
-                           << "eft: " << eft << std::endl
-                           << "lft: " << lft << std::endl);
+				DM("est: " << est << std::endl
+						   << "lst: " << lst << std::endl
+						   << "eft: " << eft << std::endl
+						   << "lft: " << lft << std::endl);
 
 				// first remove the previous segment of the job
 				// make a copy of certain_jobs to iterate over
-                int n_prec = 0;
+				int n_prec = 0;
 //                // update scheduled jobs
 //                // keep it sorted to make it easier to merge
 //                bool added_j = false;
@@ -179,90 +170,83 @@ namespace NP {
 //                if (!added_j)
 //                    certain_jobs.emplace_back(j, finish_times);
 
-                // if it is already in the preempted jobs, update its remaining time
-                bool updated_j = false;
-                for (auto it = from.preempted_jobs_tuple.begin(); it != from.preempted_jobs_tuple.end(); it++) {
+				// if it is already in the preempted jobs, update its remaining time
+				bool updated_j = false;
+				for (auto it = from.preempted_jobs_tuple.begin(); it != from.preempted_jobs_tuple.end(); it++) {
 					if (std::get<0>(*it) < j)
 						preempted_jobs_tuple.emplace_back(*it);
 					else if (std::get<0>(*it) == j) {
 						preempted_jobs_tuple.emplace_back(j, remaining_times, finish_times);
-                        updated_j = true;
-                    }
-					else if (std::get<0>(*it) > j && !updated_j) {
+						updated_j = true;
+					} else if (std::get<0>(*it) > j && !updated_j) {
 						preempted_jobs_tuple.emplace_back(j, remaining_times, finish_times);
 						preempted_jobs_tuple.emplace_back(*it);
 						updated_j = true;
-					} else{
+					} else {
 						preempted_jobs_tuple.emplace_back(*it);
 					}
 
-                }
-                // add the remaining segment of the job to the preempted jobs
-                if (!updated_j)
-                    preempted_jobs_tuple.emplace_back(j, remaining_times, finish_times);
+				}
+				// add the remaining segment of the job to the preempted jobs
+				if (!updated_j)
+					preempted_jobs_tuple.emplace_back(j, remaining_times, finish_times);
 
-                // update the cores availability intervals
-                std::vector<Time> ca, pa;
+				// update the cores availability intervals
+				std::vector<Time> ca, pa;
 
-                pa.push_back(eft);
-                ca.push_back(lft);
+				pa.push_back(eft);
+				ca.push_back(lft);
 
-                // note, we must skip first element in from.core_avail
-                if (n_prec > 1) {
-                    // if there are n_prec predecessors running, n_prec cores must be available when j starts
-                    for (int i = 1; i < n_prec; i++) {
-                        pa.push_back(std::max(est, from.core_avail[i].min()));
-                        ca.push_back(std::min(lst, std::max(est, from.core_avail[i].max())));
-                    }
+				// note, we must skip first element in from.core_avail
+				if (n_prec > 1) {
+					// if there are n_prec predecessors running, n_prec cores must be available when j starts
+					for (int i = 1; i < n_prec; i++) {
+						pa.push_back(std::max(est, from.core_avail[i].min()));
+						ca.push_back(std::min(lst, std::max(est, from.core_avail[i].max())));
+					}
 
-                    for (int i = n_prec; i < from.core_avail.size(); i++) {
-                        pa.push_back(std::max(est, from.core_avail[i].min()));
-                        ca.push_back(std::max(est, from.core_avail[i].max()));
-                    }
-                }
-                else {
-                    for (int i = 1; i < from.core_avail.size(); i++) {
-                        pa.push_back(std::max(est, from.core_avail[i].min()));
-                        ca.push_back(std::max(est, from.core_avail[i].max()));
-                    }
-                }
+					for (int i = n_prec; i < from.core_avail.size(); i++) {
+						pa.push_back(std::max(est, from.core_avail[i].min()));
+						ca.push_back(std::max(est, from.core_avail[i].max()));
+					}
+				} else {
+					for (int i = 1; i < from.core_avail.size(); i++) {
+						pa.push_back(std::max(est, from.core_avail[i].min()));
+						ca.push_back(std::max(est, from.core_avail[i].max()));
+					}
+				}
 
-                // sort in non-decreasing order
-                std::sort(pa.begin(), pa.end());
-                std::sort(ca.begin(), ca.end());
+				// sort in non-decreasing order
+				std::sort(pa.begin(), pa.end());
+				std::sort(ca.begin(), ca.end());
 
-                for (int i = 0; i < from.core_avail.size(); i++) {
-                    DM(i << " -> " << pa[i] << ":" << ca[i] << std::endl);
-                    core_avail.emplace_back(pa[i], ca[i]);
-                }
+				for (int i = 0; i < from.core_avail.size(); i++) {
+					DM(i << " -> " << pa[i] << ":" << ca[i] << std::endl);
+					core_avail.emplace_back(pa[i], ca[i]);
+				}
 
-                assert(core_avail.size() > 0);
-                DM("*** new state: constructed " << *this << std::endl);
-            }
+				assert(core_avail.size() > 0);
+				DM("*** new state: constructed " << *this << std::endl);
+			}
 
-			hash_value_t get_key() const
-			{
+			hash_value_t get_key() const {
 				return lookup_key;
 			}
 
-			hash_value_t get_pr_key() const
-			{
+			hash_value_t get_pr_key() const {
 				return lookup_pr_key;
 			}
 
-			std::pair<hash_value_t, hash_value_t> get_complete_key() const
-			{
+			std::pair<hash_value_t, hash_value_t> get_complete_key() const {
 				return std::make_pair(lookup_key, lookup_pr_key);
 			}
 
-			bool same_jobs_scheduled(const Schedule_state &other) const
-			{
+			bool same_jobs_scheduled(const Schedule_state &other) const {
 				return scheduled_jobs == other.scheduled_jobs;
 			}
 
-			bool same_job_preempted(const Schedule_state &other) const
-			{
-				if(preempted_jobs_tuple.size() != other.preempted_jobs_tuple.size())
+			bool same_job_preempted(const Schedule_state &other) const {
+				if (preempted_jobs_tuple.size() != other.preempted_jobs_tuple.size())
 					return false;
 
 				auto jt = other.preempted_jobs_tuple.begin();
@@ -276,7 +260,7 @@ namespace NP {
 				return true;
 			}
 
-			bool check_reduction_rule(const Schedule_state<Time>& other){
+			bool check_reduction_rule(const Schedule_state<Time> &other) {
 				assert(core_avail.size() == other.core_avail.size());
 
 				if (get_key() != other.get_key())
@@ -295,8 +279,7 @@ namespace NP {
 				return true;
 			}
 
-			bool can_merge_with(const Schedule_state<Time>& other)
-			{
+			bool can_merge_with(const Schedule_state<Time> &other) {
 				// check for intersection of remaining execution times and finish times of preempted jobs
 				auto jt = other.preempted_jobs_tuple.begin();
 				for (auto it = preempted_jobs_tuple.begin(); it != preempted_jobs_tuple.end(); it++) {
@@ -312,8 +295,7 @@ namespace NP {
 				return true;
 			}
 
-			bool try_to_merge(const Schedule_state<Time>& other)
-			{
+			bool try_to_merge(const Schedule_state<Time> &other) {
 				if (!can_merge_with(other))
 					return false;
 
@@ -327,7 +309,7 @@ namespace NP {
 				auto it = certain_jobs.begin();
 				auto jt = other.certain_jobs.begin();
 				while (it != certain_jobs.end() &&
-				       jt != other.certain_jobs.end()) {
+					   jt != other.certain_jobs.end()) {
 					if (it->first == jt->first) {
 						// same job
 						new_cj.emplace_back(it->first, it->second | jt->second);
@@ -356,7 +338,7 @@ namespace NP {
 				return true;
 			}
 
-			bool can_dominate(const Schedule_state<Time>& other){
+			bool can_dominate(const Schedule_state<Time> &other) {
 				bool this_dominates_other = true;
 				bool other_dominates_this = true;
 
@@ -365,9 +347,9 @@ namespace NP {
 				// and the finish times should be larger
 				auto jt_rem = other.preempted_jobs_tuple.begin();
 				for (auto it_rem = preempted_jobs_tuple.begin(); it_rem != preempted_jobs_tuple.end(); it_rem++) {
-						// first check the remaining execution time
-					if ( std::get<1>(*it_rem).min() < std::get<1>(*jt_rem).min() ||
-										std::get<1>(*it_rem).max() < std::get<1>(*jt_rem).max()) {
+					// first check the remaining execution time
+					if (std::get<1>(*it_rem).min() < std::get<1>(*jt_rem).min() ||
+						std::get<1>(*it_rem).max() < std::get<1>(*jt_rem).max()) {
 						this_dominates_other = false;
 						break;
 					}
@@ -394,8 +376,8 @@ namespace NP {
 				auto jt_orem = other.preempted_jobs_tuple.begin();
 				for (auto it_rem = preempted_jobs_tuple.begin(); it_rem != preempted_jobs_tuple.end(); it_rem++) {
 					// first check the remaining execution time
-					if ( std::get<1>(*it_rem).min() > std::get<1>(*jt_orem).min() ||
-									std::get<1>(*it_rem).max() > std::get<1>(*jt_orem).max()){
+					if (std::get<1>(*it_rem).min() > std::get<1>(*jt_orem).min() ||
+						std::get<1>(*it_rem).max() > std::get<1>(*jt_orem).max()) {
 						other_dominates_this = false;
 						break;
 					}
@@ -416,12 +398,12 @@ namespace NP {
 					return false;
 
 				// move the dominating state preempted jobs to this state
-				preempted_jobs_tuple=other.preempted_jobs_tuple;
+				preempted_jobs_tuple = other.preempted_jobs_tuple;
 
 				return true;
 			}
 
-			bool try_to_dominate(const Schedule_state<Time>& other){
+			bool try_to_dominate(const Schedule_state<Time> &other) {
 				if (!can_dominate(other))
 					return false;
 
@@ -434,36 +416,31 @@ namespace NP {
 
 			}
 
-			const unsigned int number_of_scheduled_jobs() const
-			{
+			const unsigned int number_of_scheduled_jobs() const {
 				return num_jobs_scheduled;
 			}
 
-			const unsigned int number_of_dispatched_segments() const
-			{
+			const unsigned int number_of_dispatched_segments() const {
 				return num_dispatched_segments;
 			}
 
-			Interval<Time> core_availability() const
-			{
+			Interval<Time> core_availability() const {
 				assert(core_avail.size() > 0);
 				return core_avail[0];
 			}
 
-			unsigned int number_of_certainly_available_cores(Time t) const
-			{
+			unsigned int number_of_certainly_available_cores(Time t) const {
 				unsigned int n = 0;
-				for(int i = 0; i < core_avail.size(); i++)
-					if (core_avail[i].max() <= t){
+				for (int i = 0; i < core_avail.size(); i++)
+					if (core_avail[i].max() <= t) {
 						n++;
 						break;
 					}
 				return n;
 			}
 
-			bool get_finish_times(Job_index j, Interval<Time> &ftimes) const
-			{
-				for (const auto& rj : certain_jobs) {
+			bool get_finish_times(Job_index j, Interval<Time> &ftimes) const {
+				for (const auto &rj: certain_jobs) {
 					// check index
 					if (j == rj.first) {
 						ftimes = rj.second;
@@ -487,87 +464,79 @@ namespace NP {
 				return Interval<Time>(Time(0), Time(0));
 			}
 
-			const bool job_incomplete(Job_index j) const
-			{
+			const bool job_incomplete(Job_index j) const {
 				return !scheduled_jobs.contains(j);
 			}
 
-            const bool job_preempted(Job_index j) const
-            {
+			const bool job_preempted(Job_index j) const {
 				for (auto it = preempted_jobs_tuple.begin(); it != preempted_jobs_tuple.end(); it++) {
-                    if (j == std::get<0>(*it))
-                        return true;
-                }
-                return false;
-            }
+					if (j == std::get<0>(*it))
+						return true;
+				}
+				return false;
+			}
 
-            const bool has_preempted_jobs() const
-            {
-                return preempted_jobs_tuple.size() > 0;
-            }
+			const bool has_preempted_jobs() const {
+				return preempted_jobs_tuple.size() > 0;
+			}
 
-            std::vector<std::tuple<Job_index, Interval<Time>, Interval<Time>>> get_preempted_jobs() const
-            {
-                return preempted_jobs_tuple;
-            }
+			std::vector<std::tuple<Job_index, Interval<Time>, Interval<Time>>> get_preempted_jobs() const {
+				return preempted_jobs_tuple;
+			}
 
-            Interval<Time> get_remaining_time(Job_index j) const
-            {
+			Interval<Time> get_remaining_time(Job_index j) const {
 				for (auto it = preempted_jobs_tuple.begin(); it != preempted_jobs_tuple.end(); it++) {
-                    if (j == std::get<0>(*it))
-                        return std::get<1>(*it);
-                }
-                return Interval<Time>(Time(0), Time(0));
-            }
+					if (j == std::get<0>(*it))
+						return std::get<1>(*it);
+				}
+				return Interval<Time>(Time(0), Time(0));
+			}
 
-			const bool job_ready(const Job_precedence_set& predecessors) const
-			{
-				for (auto j : predecessors)
+			const bool job_ready(const Job_precedence_set &predecessors) const {
+				for (auto j: predecessors)
 					if (!scheduled_jobs.contains(j))
 						return false;
 				return true;
 			}
 
-			friend std::ostream& operator<< (std::ostream& stream,
-			                                 const Schedule_state<Time>& s)
-			{
+			friend std::ostream &operator<<(std::ostream &stream,
+											const Schedule_state<Time> &s) {
 				stream << "Global::State(";
-				for (const auto& a : s.core_avail)
+				for (const auto &a: s.core_avail)
 					stream << "[" << a.from() << ", " << a.until() << "] ";
 				stream << "(";
-				for (const auto& rj : s.certain_jobs)
+				for (const auto &rj: s.certain_jobs)
 					stream << rj.first << "";
 				stream << ") " << s.scheduled_jobs << ")";
 				stream << " @ " << &s;
 				return stream;
 			}
 
-			void print_vertex_label(std::ostream& out,
-				const typename Job<Time>::Job_set& jobs) const
-			{
-				for (const auto& a : core_avail)
+			void print_vertex_label(std::ostream &out,
+									const typename Job<Time>::Job_set &jobs) const {
+				for (const auto &a: core_avail)
 					out << "[" << a.from() << ", " << a.until() << "] ";
 				out << "\\n";
 				bool first = true;
 				out << "{";
-				for (const auto& rj : certain_jobs) {
+				for (const auto &rj: certain_jobs) {
 					if (!first)
 						out << ", ";
 					out << "T" << jobs[rj.first].get_task_id()
-					    << "J" << jobs[rj.first].get_job_id() << ":"
-					    << rj.second.min() << "-" << rj.second.max();
+						<< "J" << jobs[rj.first].get_job_id() << ":"
+						<< rj.second.min() << "-" << rj.second.max();
 					first = false;
 				}
 				out << "}";
 			}
 
-			bool removed() const{
+			bool removed() const {
 				if (core_avail.size() == 0)
 					return true;
 				return false;
 			}
 
-			private:
+		private:
 
 			const unsigned int num_jobs_scheduled;
 			const unsigned int num_dispatched_segments;
@@ -575,7 +544,7 @@ namespace NP {
 			// set of jobs that have been dispatched (may still be running)
 			const Index_set scheduled_jobs;
 
-            // set of remaining segments of jobs that are preempted
+			// set of remaining segments of jobs that are preempted
 			// <1> job index -- <2> remaining execution time -- <3> finish time
 			std::vector<std::tuple<Job_index, Interval<Time>, Interval<Time>>> preempted_jobs_tuple;
 

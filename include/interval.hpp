@@ -8,13 +8,13 @@
 #include <limits>
 #include "time.hpp"
 
-template<class T> class Interval {
+template<class T>
+class Interval {
 	T a, b;
 
-	public:
+public:
 
-	Interval(const T &a, const T &b)
-	{
+	Interval(const T &a, const T &b) {
 		if (a > b) {
 			this->a = b;
 			this->b = a;
@@ -25,142 +25,118 @@ template<class T> class Interval {
 	}
 
 	Interval(const std::pair<T, T> p)
-	: Interval(p.first, p.second)
-	{
+			: Interval(p.first, p.second) {
 	}
 
-	Interval(const Interval<T>& orig)
-	: a(orig.a)
-	, b(orig.b)
-	{
+	Interval(const Interval<T> &orig)
+			: a(orig.a), b(orig.b) {
 	}
 
-	const T& from() const
-	{
+	const T &from() const {
 		return a;
 	}
 
-	const T& min() const
-	{
+	const T &min() const {
 		return a;
 	}
 
-	const T& starting_at() const
-	{
+	const T &starting_at() const {
 		return a;
 	}
 
-	const T& until() const
-	{
+	const T &until() const {
 		return b;
 	}
 
-	const T& upto() const
-	{
+	const T &upto() const {
 		return b;
 	}
 
-	const T& max() const
-	{
+	const T &max() const {
 		return b;
 	}
 
-	bool contains(const Interval<T>& other) const
-	{
+	bool contains(const Interval<T> &other) const {
 		return from() <= other.from() && other.until() <= until();
 	}
 
-	bool contains(const T& point) const
-	{
+	bool contains(const T &point) const {
 		return from() <= point && point <= until();
 	}
 
-	bool disjoint(const Interval<T>& other) const
-	{
+	bool disjoint(const Interval<T> &other) const {
 		//consecutive intervals are not considered to be disjoint
 		// eg. [2,3] and [4,5] is not considered disjoint, this can be merged to form [2,5]
 		bool disjoint;
 		disjoint = (other.until() + Time_model::constants<T>::epsilon()) < from() ||
-                               (until() + Time_model::constants<T>::epsilon()) < other.from();
+				   (until() + Time_model::constants<T>::epsilon()) < other.from();
 		return disjoint;
 	}
 
-	bool intersects(const Interval<T>& other) const
-	{
+	bool intersects(const Interval<T> &other) const {
 		return not disjoint(other);
 	}
 
-	bool operator==(const Interval<T>& other) const
-	{
+	bool operator==(const Interval<T> &other) const {
 		return other.from() == from() && other.until() == until();
 	}
 
-	void operator +=(T offset)
-	{
+	void operator+=(T offset) {
 		a += offset;
 		b += offset;
 	}
 
-	Interval<T> operator+(const Interval<T>& other) const
-	{
+	Interval<T> operator+(const Interval<T> &other) const {
 		return {a + other.a, b + other.b};
 	}
 
-	Interval<T> operator+(const std::pair<T, T>& other) const
-	{
+	Interval<T> operator+(const std::pair<T, T> &other) const {
 		return {a + other.first, b + other.second};
 	}
 
-	Interval<T> merge(const Interval<T>& other) const
-	{
+	Interval<T> merge(const Interval<T> &other) const {
 		return Interval<T>{std::min(from(), other.from()),
-		                   std::max(until(), other.until())};
+						   std::max(until(), other.until())};
 	}
 
-	void widen(const Interval<T>& other)
-	{
+	void widen(const Interval<T> &other) {
 		a = std::min(from(), other.from());
 		b = std::max(until(), other.until());
 	}
 
-	Interval<T> operator|(const Interval<T>& other) const
-	{
+	Interval<T> operator|(const Interval<T> &other) const {
 		return merge(other);
 	}
 
-	void operator|=(const Interval<T>& other)
-	{
+	void operator|=(const Interval<T> &other) {
 		widen(other);
 	}
 
-	void lower_bound(T lb)
-	{
+	void lower_bound(T lb) {
 		a = std::max(lb, a);
 	}
 
-	void extend_to(T b_at_least)
-	{
+	void extend_to(T b_at_least) {
 		b = std::max(b_at_least, b);
 	}
 
-	T length() const
-	{
+	T length() const {
 		return until() - from();
 	}
 };
 
-template<class T> std::ostream& operator<< (std::ostream& stream, const Interval<T>& i)
-{
+template<class T>
+std::ostream &operator<<(std::ostream &stream, const Interval<T> &i) {
 	stream << "I(" << i.from() << ", " << i.until() << ")";
 	return stream;
 }
 
 
-
-template<class T, class X, Interval<T> (*map)(const X&)> class Interval_lookup_table {
+template<class T, class X, Interval<T> (*map)(const X &)>
+class Interval_lookup_table {
 	typedef std::vector<std::reference_wrapper<const X>> Bucket;
 
-	private:
+private:
 
 	std::unique_ptr<Bucket[]> buckets;
 	const Interval<T> range;
@@ -168,10 +144,9 @@ template<class T, class X, Interval<T> (*map)(const X&)> class Interval_lookup_t
 	const unsigned int num_buckets;
 
 
-	public:
+public:
 
-	std::size_t bucket_of(const T& point) const
-	{
+	std::size_t bucket_of(const T &point) const {
 		if (range.contains(point)) {
 			return static_cast<std::size_t>((point - range.from()) / width);
 		} else if (point < range.from()) {
@@ -180,18 +155,14 @@ template<class T, class X, Interval<T> (*map)(const X&)> class Interval_lookup_t
 			return num_buckets - 1;
 	}
 
-	Interval_lookup_table(const Interval<T>& range, T bucket_width)
-	: range(range)
-	, width(std::max(bucket_width, static_cast<T>(1)))
-	, num_buckets(1 + std::max(
-	                  static_cast<std::size_t>(range.length() / this->width),
-	                  static_cast<std::size_t>(1)))
-	{
+	Interval_lookup_table(const Interval<T> &range, T bucket_width)
+			: range(range), width(std::max(bucket_width, static_cast<T>(1))), num_buckets(1 + std::max(
+			static_cast<std::size_t>(range.length() / this->width),
+			static_cast<std::size_t>(1))) {
 		buckets = std::make_unique<Bucket[]>(num_buckets);
 	}
 
-	void insert(const X& x)
-	{
+	void insert(const X &x) {
 		Interval<T> w = map(x);
 		auto a = bucket_of(w.from()), b = bucket_of(w.until());
 		assert(a < num_buckets);
@@ -200,13 +171,11 @@ template<class T, class X, Interval<T> (*map)(const X&)> class Interval_lookup_t
 			buckets[i].push_back(x);
 	}
 
-	const Bucket& lookup(T point) const
-	{
+	const Bucket &lookup(T point) const {
 		return buckets[bucket_of(point)];
 	}
 
-	const Bucket& bucket(std::size_t i) const
-	{
+	const Bucket &bucket(std::size_t i) const {
 		return buckets[i];
 	}
 

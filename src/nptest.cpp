@@ -4,7 +4,9 @@
 #include <algorithm>
 
 #ifndef _WIN32
+
 #include <sys/resource.h>
+
 #endif
 
 #include "OptionParser.h"
@@ -69,20 +71,19 @@ struct Analysis_result {
 
 template<class Time, class Space>
 static Analysis_result analyze(
-	std::istream &in,
-	std::istream &dag_in,
-	std::istream &aborts_in)
-{
+		std::istream &in,
+		std::istream &dag_in,
+		std::istream &aborts_in) {
 #ifdef CONFIG_PARALLEL
 	oneapi::tbb::task_arena arena(num_worker_threads ? num_worker_threads : oneapi::tbb::info::default_concurrency());
 #endif
 
 	// Parse input files and create NP scheduling problem description
 	NP::Scheduling_problem<Time> problem{
-		NP::parse_file<Time>(in, want_worst_case),
-		NP::parse_dag_file(dag_in),
-		NP::parse_abort_file<Time>(aborts_in),
-		num_processors};
+			NP::parse_file<Time>(in, want_worst_case),
+			NP::parse_dag_file(dag_in),
+			NP::parse_abort_file<Time>(aborts_in),
+			num_processors};
 
 	// Set common analysis options
 	NP::Analysis_options opts;
@@ -106,58 +107,62 @@ static Analysis_result analyze(
 
 	if (want_rta_file) {
 		rta << "Task ID, Job ID, BCCT, WCCT, BCRT, WCRT" << std::endl;
-		for (const auto& j : problem.jobs) {
+		for (const auto &j: problem.jobs) {
 			Interval<Time> finish = space.get_finish_times(j);
 			rta << j.get_task_id() << ", "
-			    << j.get_job_id() << ", "
-			    << finish.from() << ", "
-			    << finish.until() << ", "
-			    << std::max<long long>(0,
-			                           (finish.from() - j.earliest_arrival()))
-			    << ", "
-			    << (finish.until() - j.earliest_arrival())
-			    << std::endl;
+				<< j.get_job_id() << ", "
+				<< finish.from() << ", "
+				<< finish.until() << ", "
+				<< std::max<long long>(0,
+									   (finish.from() - j.earliest_arrival()))
+				<< ", "
+				<< (finish.until() - j.earliest_arrival())
+				<< std::endl;
 		}
 	}
 
 	return {
-		space.is_schedulable(),
-		space.was_timed_out(),
-		space.number_of_states(),
-		space.number_of_edges(),
-		space.max_exploration_front_width(),
-		problem.jobs.size(),
-		space.get_cpu_time(),
-		graph.str(),
-		rta.str()
+			space.is_schedulable(),
+			space.was_timed_out(),
+			space.number_of_states(),
+			space.number_of_edges(),
+			space.max_exploration_front_width(),
+			problem.jobs.size(),
+			space.get_cpu_time(),
+			graph.str(),
+			rta.str()
 	};
 }
 
 static Analysis_result process_stream(
-	std::istream &in,
-	std::istream &dag_in,
-	std::istream &aborts_in)
-{
+		std::istream &in,
+		std::istream &dag_in,
+		std::istream &aborts_in) {
 	if (want_multiprocessor && want_dense)
 		return analyze<dense_t, NP::Global::State_space<dense_t>>(in, dag_in, aborts_in);
 	else if (want_multiprocessor && !want_dense)
 		return analyze<dtime_t, NP::Global::State_space<dtime_t>>(in, dag_in, aborts_in);
 	else if (want_dense && want_prm_iip)
-		return analyze<dense_t, NP::Uniproc::State_space<dense_t, NP::Uniproc::Precatious_RM_IIP<dense_t>>>(in, dag_in, aborts_in);
+		return analyze<dense_t, NP::Uniproc::State_space<dense_t, NP::Uniproc::Precatious_RM_IIP<dense_t>>>(in, dag_in,
+																											aborts_in);
 	else if (want_dense && want_cw_iip)
-		return analyze<dense_t, NP::Uniproc::State_space<dense_t, NP::Uniproc::Critical_window_IIP<dense_t>>>(in, dag_in, aborts_in);
+		return analyze<dense_t, NP::Uniproc::State_space<dense_t, NP::Uniproc::Critical_window_IIP<dense_t>>>(in,
+																											  dag_in,
+																											  aborts_in);
 	else if (want_dense && !want_prm_iip)
 		return analyze<dense_t, NP::Uniproc::State_space<dense_t>>(in, dag_in, aborts_in);
 	else if (!want_dense && want_prm_iip)
-		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t, NP::Uniproc::Precatious_RM_IIP<dtime_t>>>(in, dag_in, aborts_in);
+		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t, NP::Uniproc::Precatious_RM_IIP<dtime_t>>>(in, dag_in,
+																											aborts_in);
 	else if (!want_dense && want_cw_iip)
-		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t, NP::Uniproc::Critical_window_IIP<dtime_t>>>(in, dag_in, aborts_in);
+		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t, NP::Uniproc::Critical_window_IIP<dtime_t>>>(in,
+																											  dag_in,
+																											  aborts_in);
 	else
 		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t>>(in, dag_in, aborts_in);
 }
 
-static void process_file(const std::string& fname)
-{
+static void process_file(const std::string &fname) {
 	try {
 		Analysis_result result;
 
@@ -173,12 +178,12 @@ static void process_file(const std::string& fname)
 			aborts_stream.open(aborts_file);
 
 		std::istream &dag_in = want_precedence ?
-			static_cast<std::istream&>(dag_stream) :
-			static_cast<std::istream&>(empty_dag_stream);
+							   static_cast<std::istream &>(dag_stream) :
+							   static_cast<std::istream &>(empty_dag_stream);
 
 		std::istream &aborts_in = want_aborts ?
-			static_cast<std::istream&>(aborts_stream) :
-			static_cast<std::istream&>(empty_aborts_stream);
+								  static_cast<std::istream &>(aborts_stream) :
+								  static_cast<std::istream &>(empty_aborts_stream);
 
 		if (fname == "-")
 			result = process_stream(std::cin, dag_in, aborts_in);
@@ -202,7 +207,7 @@ static void process_file(const std::string& fname)
 				auto p = rta_name.find(".csv");
 				if (p != std::string::npos) {
 					rta_name.replace(p, std::string::npos, ".rta.csv");
-					auto out  = std::ofstream(rta_name,  std::ios::out);
+					auto out = std::ofstream(rta_name, std::ios::out);
 					out << result.response_times_csv;
 					out.close();
 				}
@@ -227,115 +232,114 @@ static void process_file(const std::string& fname)
 			std::cout << ",  " << (int) result.schedulable;
 
 		std::cout << ",  " << result.number_of_jobs
-		          << ",  " << result.number_of_states
-		          << ",  " << result.number_of_edges
-		          << ",  " << result.max_width
-		          << ",  " << std::fixed << result.cpu_time
-		          << ",  " << ((double) mem_used) / (1024.0)
-		          << ",  " << (int) result.timeout
-		          << ",  " << num_processors
-		          << std::endl;
-	} catch (std::ios_base::failure& ex) {
+				  << ",  " << result.number_of_states
+				  << ",  " << result.number_of_edges
+				  << ",  " << result.max_width
+				  << ",  " << std::fixed << result.cpu_time
+				  << ",  " << ((double) mem_used) / (1024.0)
+				  << ",  " << (int) result.timeout
+				  << ",  " << num_processors
+				  << std::endl;
+	} catch (std::ios_base::failure &ex) {
 		std::cerr << fname;
 		if (want_precedence)
 			std::cerr << " + " << precedence_file;
-		std::cerr <<  ": parse error" << std::endl;
+		std::cerr << ": parse error" << std::endl;
 		exit(1);
-	} catch (NP::InvalidJobReference& ex) {
+	} catch (NP::InvalidJobReference &ex) {
 		std::cerr << precedence_file << ": bad job reference: job "
-		          << ex.ref.job << " of task " << ex.ref.task
-			      << " is not part of the job set given in "
-			      << fname
-			      << std::endl;
+				  << ex.ref.job << " of task " << ex.ref.task
+				  << " is not part of the job set given in "
+				  << fname
+				  << std::endl;
 		exit(3);
-	} catch (NP::InvalidAbortParameter& ex) {
+	} catch (NP::InvalidAbortParameter &ex) {
 		std::cerr << aborts_file << ": invalid abort parameter: job "
-		          << ex.ref.job << " of task " << ex.ref.task
-			      << " has an impossible abort time (abort before release)"
-			      << std::endl;
+				  << ex.ref.job << " of task " << ex.ref.task
+				  << " has an impossible abort time (abort before release)"
+				  << std::endl;
 		exit(4);
-	} catch (std::exception& ex) {
+	} catch (std::exception &ex) {
 		std::cerr << fname << ": '" << ex.what() << "'" << std::endl;
 		exit(1);
 	}
 }
 
-static void print_header(){
+static void print_header() {
 	std::cout << "# file name"
-	          << ", schedulable?"
-	          << ", #jobs"
-	          << ", #states"
-	          << ", #edges"
-	          << ", max width"
-	          << ", CPU time"
-	          << ", memory"
-	          << ", timeout"
-	          << ", #CPUs"
-	          << std::endl;
+			  << ", schedulable?"
+			  << ", #jobs"
+			  << ", #states"
+			  << ", #edges"
+			  << ", max width"
+			  << ", CPU time"
+			  << ", memory"
+			  << ", timeout"
+			  << ", #CPUs"
+			  << std::endl;
 }
 
-int main(int argc, char** argv)
-{
+int main(int argc, char **argv) {
 	auto parser = optparse::OptionParser();
 
 	parser.description("Exact NP Schedulability Tester");
 	parser.usage("usage: %prog [OPTIONS]... [JOB SET FILES]...");
 
 	parser.add_option("-t", "--time").dest("time_model")
-	      .metavar("TIME-MODEL")
-	      .choices({"dense", "discrete"}).set_default("discrete")
-	      .help("choose 'discrete' or 'dense' time (default: discrete)");
+			.metavar("TIME-MODEL")
+			.choices({"dense", "discrete"}).set_default("discrete")
+			.help("choose 'discrete' or 'dense' time (default: discrete)");
 
 	parser.add_option("-l", "--time-limit").dest("timeout")
-	      .help("maximum CPU time allowed (in seconds, zero means no limit)")
-	      .set_default("0");
+			.help("maximum CPU time allowed (in seconds, zero means no limit)")
+			.set_default("0");
 
 	parser.add_option("-d", "--depth-limit").dest("depth")
-	      .help("abort graph exploration after reaching given depth (>= 2)")
-	      .set_default("0");
+			.help("abort graph exploration after reaching given depth (>= 2)")
+			.set_default("0");
 
 	parser.add_option("-n", "--naive").dest("naive").set_default("0")
-	      .action("store_const").set_const("1")
-	      .help("use the naive exploration method (default: merging)");
+			.action("store_const").set_const("1")
+			.help("use the naive exploration method (default: merging)");
 
 	parser.add_option("-i", "--iip").dest("iip")
-	      .choices({"none", "P-RM", "CW"}).set_default("none")
-	      .help("the IIP to use (default: none)");
+			.choices({"none", "P-RM", "CW"}).set_default("none")
+			.help("the IIP to use (default: none)");
 
 	parser.add_option("-p", "--precedence").dest("precedence_file")
-	      .help("name of the file that contains the job set's precedence DAG")
-	      .set_default("");
+			.help("name of the file that contains the job set's precedence DAG")
+			.set_default("");
 
 	parser.add_option("-a", "--abort-actions").dest("abort_file")
-	      .help("name of the file that contains the job set's abort actions")
-	      .set_default("");
+			.help("name of the file that contains the job set's abort actions")
+			.set_default("");
 
 	parser.add_option("-m", "--multiprocessor").dest("num_processors")
-	      .help("set the number of processors of the platform")
-	      .set_default("1");
+			.help("set the number of processors of the platform")
+			.set_default("1");
 
 	parser.add_option("--threads").dest("num_threads")
-	      .help("set the number of worker threads (parallel analysis)")
-	      .set_default("0");
+			.help("set the number of worker threads (parallel analysis)")
+			.set_default("0");
 
 	parser.add_option("--header").dest("print_header")
-	      .help("print a column header")
-	      .action("store_const").set_const("1")
-	      .set_default("0");
+			.help("print a column header")
+			.action("store_const").set_const("1")
+			.set_default("0");
 
 	parser.add_option("-g", "--save-graph").dest("dot").set_default("0")
-	      .action("store_const").set_const("1")
-	      .help("store the state graph in Graphviz dot format (default: off)");
+			.action("store_const").set_const("1")
+			.help("store the state graph in Graphviz dot format (default: off)");
 
 	parser.add_option("-r", "--save-response-times").dest("rta").set_default("0")
-	      .action("store_const").set_const("1")
-	      .help("store the best- and worst-case response times (default: off)");
+			.action("store_const").set_const("1")
+			.help("store the best- and worst-case response times (default: off)");
 
 	parser.add_option("-c", "--continue-after-deadline-miss")
-	      .dest("go_on_after_dl").set_default("0")
-	      .action("store_const").set_const("1")
-	      .help("do not abort the analysis on the first deadline miss "
-	            "(default: off)");
+			.dest("go_on_after_dl").set_default("0")
+			.action("store_const").set_const("1")
+			.help("do not abort the analysis on the first deadline miss "
+				  "(default: off)");
 
 	parser.add_option("-w", "--worst")
 			.dest("want_worst_case").set_default("0")
@@ -346,10 +350,10 @@ int main(int argc, char** argv)
 
 	auto options = parser.parse_args(argc, argv);
 
-	const std::string& time_model = options.get("time_model");
+	const std::string &time_model = options.get("time_model");
 	want_dense = time_model == "dense";
 
-	const std::string& iip = options.get("iip");
+	const std::string &iip = options.get("iip");
 	want_prm_iip = iip == "P-RM";
 	want_cw_iip = iip == "CW";
 
@@ -369,18 +373,18 @@ int main(int argc, char** argv)
 	want_precedence = options.is_set_by_user("precedence_file");
 	if (want_precedence && parser.args().size() > 1) {
 		std::cerr << "[!!] Warning: multiple job sets "
-		          << "with a single precedence DAG specified."
-		          << std::endl;
+				  << "with a single precedence DAG specified."
+				  << std::endl;
 	}
-	precedence_file = (const std::string&) options.get("precedence_file");
+	precedence_file = (const std::string &) options.get("precedence_file");
 
 	want_aborts = options.is_set_by_user("abort_file");
 	if (want_aborts && parser.args().size() > 1) {
 		std::cerr << "[!!] Warning: multiple job sets "
-		          << "with a single abort action list specified."
-		          << std::endl;
+				  << "with a single abort action list specified."
+				  << std::endl;
 	}
-	aborts_file = (const std::string&) options.get("abort_file");
+	aborts_file = (const std::string &) options.get("abort_file");
 
 	want_multiprocessor = options.is_set_by_user("num_processors");
 	num_processors = options.get("num_processors");
@@ -399,8 +403,8 @@ int main(int argc, char** argv)
 #else
 	if (options.is_set_by_user("dot")) {
 		std::cerr << "Error: graph collection support must be enabled "
-		          << "during compilation (CONFIG_COLLECT_SCHEDULE_GRAPH "
-		          << "is not set)." << std::endl;
+				  << "during compilation (CONFIG_COLLECT_SCHEDULE_GRAPH "
+				  << "is not set)." << std::endl;
 		return 2;
 	}
 #endif
@@ -410,8 +414,8 @@ int main(int argc, char** argv)
 #else
 	if (options.is_set_by_user("num_threads")) {
 		std::cerr << "Error: parallel analysis must be enabled "
-		          << "during compilation (CONFIG_PARALLEL "
-		          << "is not set)." << std::endl;
+				  << "during compilation (CONFIG_PARALLEL "
+				  << "is not set)." << std::endl;
 		return 3;
 	}
 #endif
@@ -419,7 +423,7 @@ int main(int argc, char** argv)
 	if (options.get("print_header"))
 		print_header();
 
-	for (auto f : parser.args())
+	for (auto f: parser.args())
 		process_file(f);
 
 	if (parser.args().empty())

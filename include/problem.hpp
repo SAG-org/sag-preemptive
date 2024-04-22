@@ -29,24 +29,17 @@ namespace NP {
 
 		// Classic default setup: no abort actions
 		Scheduling_problem(Workload jobs, Precedence_constraints dag,
-		                   unsigned int num_processors = 1)
-		: num_processors(num_processors)
-		, jobs(jobs)
-		, dag(dag)
-		{
+						   unsigned int num_processors = 1)
+				: num_processors(num_processors), jobs(jobs), dag(dag) {
 			assert(num_processors > 0);
 			validate_prec_refs<Time>(dag, jobs);
 		}
 
 		// Full constructor with abort actions
 		Scheduling_problem(Workload jobs, Precedence_constraints dag,
-		                   Abort_actions aborts,
-		                   unsigned int num_processors)
-		: num_processors(num_processors)
-		, jobs(jobs)
-		, dag(dag)
-		, aborts(aborts)
-		{
+						   Abort_actions aborts,
+						   unsigned int num_processors)
+				: num_processors(num_processors), jobs(jobs), dag(dag), aborts(aborts) {
 			assert(num_processors > 0);
 			validate_prec_refs<Time>(dag, jobs);
 			validate_abort_refs<Time>(aborts, jobs);
@@ -54,10 +47,8 @@ namespace NP {
 
 		// Convenience constructor: no DAG, no abort actions
 		Scheduling_problem(Workload jobs,
-		                   unsigned int num_processors = 1)
-		: jobs(jobs)
-		, num_processors(num_processors)
-		{
+						   unsigned int num_processors = 1)
+				: jobs(jobs), num_processors(num_processors) {
 			assert(num_processors > 0);
 		}
 	};
@@ -87,12 +78,7 @@ namespace NP {
 		std::size_t num_buckets;
 
 		Analysis_options()
-		: timeout(0)
-		, max_depth(0)
-		, early_exit(true)
-		, num_buckets(1000)
-		, be_naive(false)
-		{
+				: timeout(0), max_depth(0), early_exit(true), num_buckets(1000), be_naive(false) {
 		}
 	};
 }
