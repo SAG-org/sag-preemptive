@@ -22,7 +22,6 @@
 #endif
 
 #include "problem.hpp"
-#include "uni/space.hpp"
 #include "global/space.hpp"
 #include "io.hpp"
 #include "clock.hpp"
@@ -42,7 +41,6 @@ static std::string precedence_file;
 static bool want_aborts = false;
 static std::string aborts_file;
 
-static bool want_multiprocessor = false;
 static unsigned int num_processors = 1;
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
@@ -138,28 +136,10 @@ static Analysis_result process_stream(
 		std::istream &in,
 		std::istream &dag_in,
 		std::istream &aborts_in) {
-	if (want_multiprocessor && want_dense)
+	if (want_dense)
 		return analyze<dense_t, NP::Global::State_space<dense_t>>(in, dag_in, aborts_in);
-	else if (want_multiprocessor && !want_dense)
-		return analyze<dtime_t, NP::Global::State_space<dtime_t>>(in, dag_in, aborts_in);
-	else if (want_dense && want_prm_iip)
-		return analyze<dense_t, NP::Uniproc::State_space<dense_t, NP::Uniproc::Precatious_RM_IIP<dense_t>>>(in, dag_in,
-																											aborts_in);
-	else if (want_dense && want_cw_iip)
-		return analyze<dense_t, NP::Uniproc::State_space<dense_t, NP::Uniproc::Critical_window_IIP<dense_t>>>(in,
-																											  dag_in,
-																											  aborts_in);
-	else if (want_dense && !want_prm_iip)
-		return analyze<dense_t, NP::Uniproc::State_space<dense_t>>(in, dag_in, aborts_in);
-	else if (!want_dense && want_prm_iip)
-		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t, NP::Uniproc::Precatious_RM_IIP<dtime_t>>>(in, dag_in,
-																											aborts_in);
-	else if (!want_dense && want_cw_iip)
-		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t, NP::Uniproc::Critical_window_IIP<dtime_t>>>(in,
-																											  dag_in,
-																											  aborts_in);
 	else
-		return analyze<dtime_t, NP::Uniproc::State_space<dtime_t>>(in, dag_in, aborts_in);
+		return analyze<dtime_t, NP::Global::State_space<dtime_t>>(in, dag_in, aborts_in);
 }
 
 static void process_file(const std::string &fname) {
@@ -386,7 +366,6 @@ int main(int argc, char **argv) {
 	}
 	aborts_file = (const std::string &) options.get("abort_file");
 
-	want_multiprocessor = options.is_set_by_user("num_processors");
 	num_processors = options.get("num_processors");
 	if (!num_processors || num_processors > MAX_PROCESSORS) {
 		std::cerr << "Error: invalid number of processors\n" << std::endl;
