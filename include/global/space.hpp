@@ -1140,7 +1140,8 @@ namespace PREEMPTIVE {
 						if (s.number_of_scheduled_jobs() != current_job_count) {
 							// copy to next depth
 							states().push_back(std::move(s));
-							merge_or_cache(&(*(--states().end())));
+							cache_state(&(*(--states().end())));
+//							merge_or_cache(&(*(--states().end())));
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 							// change the state pointer in the edges
 							for (auto& e : edges) {
