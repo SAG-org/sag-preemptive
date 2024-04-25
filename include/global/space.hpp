@@ -28,7 +28,7 @@
 
 #include "global/state.hpp"
 
-namespace PREEMPTIVE {
+namespace Preemptive {
 
 	namespace Global {
 
@@ -1292,8 +1292,8 @@ namespace PREEMPTIVE {
 
 namespace std {
 	template<class Time>
-	struct hash<PREEMPTIVE::Global::Schedule_state<Time>> {
-		std::size_t operator()(PREEMPTIVE::Global::Schedule_state<Time> const &s) const {
+	struct hash<Preemptive::Global::Schedule_state<Time>> {
+		std::size_t operator()(Preemptive::Global::Schedule_state<Time> const &s) const {
 			return s.get_key();
 		}
 	};

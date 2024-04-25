@@ -75,14 +75,14 @@ static Analysis_result analyze(
 #endif
 
 	// Parse input files and create NP scheduling problem description
-	PREEMPTIVE::Scheduling_problem<Time> problem{
-			PREEMPTIVE::parse_file<Time>(in, want_worst_case),
-			PREEMPTIVE::parse_dag_file(dag_in),
-			PREEMPTIVE::parse_abort_file<Time>(aborts_in),
+	Preemptive::Scheduling_problem<Time> problem{
+			Preemptive::parse_file<Time>(in, want_worst_case),
+			Preemptive::parse_dag_file(dag_in),
+			Preemptive::parse_abort_file<Time>(aborts_in),
 			num_processors};
 
 	// Set common analysis options
-	PREEMPTIVE::Analysis_options opts;
+	Preemptive::Analysis_options opts;
 	opts.timeout = timeout;
 	opts.max_depth = max_depth;
 	opts.early_exit = !continue_after_dl_miss;
@@ -135,9 +135,9 @@ static Analysis_result process_stream(
 		std::istream &dag_in,
 		std::istream &aborts_in) {
 	if (want_dense)
-		return analyze<dense_t, PREEMPTIVE::Global::State_space<dense_t>>(in, dag_in, aborts_in);
+		return analyze<dense_t, Preemptive::Global::State_space<dense_t>>(in, dag_in, aborts_in);
 	else
-		return analyze<dtime_t, PREEMPTIVE::Global::State_space<dtime_t>>(in, dag_in, aborts_in);
+		return analyze<dtime_t, Preemptive::Global::State_space<dtime_t>>(in, dag_in, aborts_in);
 }
 
 static void process_file(const std::string &fname) {
@@ -224,14 +224,14 @@ static void process_file(const std::string &fname) {
 			std::cerr << " + " << precedence_file;
 		std::cerr << ": parse error" << std::endl;
 		exit(1);
-	} catch (PREEMPTIVE::InvalidJobReference &ex) {
+	} catch (Preemptive::InvalidJobReference &ex) {
 		std::cerr << precedence_file << ": bad job reference: job "
 				  << ex.ref.job << " of task " << ex.ref.task
 				  << " is not part of the job set given in "
 				  << fname
 				  << std::endl;
 		exit(3);
-	} catch (PREEMPTIVE::InvalidAbortParameter &ex) {
+	} catch (Preemptive::InvalidAbortParameter &ex) {
 		std::cerr << aborts_file << ": invalid abort parameter: job "
 				  << ex.ref.job << " of task " << ex.ref.task
 				  << " has an impossible abort time (abort before release)"

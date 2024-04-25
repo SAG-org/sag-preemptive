@@ -3,7 +3,7 @@
 
 #include "jobs.hpp"
 
-namespace PREEMPTIVE {
+namespace Preemptive {
 
 	typedef std::pair<JobID, JobID> Precedence_constraint;
 	typedef std::vector<Precedence_constraint> Precedence_constraints;

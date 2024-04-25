@@ -1,7 +1,7 @@
 #ifndef INDEX_SET_H
 #define INDEX_SET_H
 
-namespace PREEMPTIVE {
+namespace Preemptive {
 
 	class Index_set {
 	public:

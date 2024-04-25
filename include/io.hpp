@@ -10,7 +10,7 @@
 #include "precedence.hpp"
 #include "aborts.hpp"
 
-namespace PREEMPTIVE {
+namespace Preemptive {
 
 	inline void skip_over(std::istream& in, char c)
 	{

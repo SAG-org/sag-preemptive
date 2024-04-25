@@ -5,7 +5,7 @@
 #include <fstream>
 #include <algorithm>
 
-namespace PREEMPTIVE {
+namespace Preemptive {
 
 	template<class InputIt, class T>
 	bool contains(InputIt first, InputIt last, const T &val) {
