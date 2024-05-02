@@ -40,7 +40,7 @@ namespace Preemptive {
 					hash_value_t key)
 					: num_jobs_scheduled(from.num_jobs_scheduled + 1),
 					  num_dispatched_segments(from.num_dispatched_segments), scheduled_jobs{from.scheduled_jobs, j},
-					  preempted_jobs_tuple(from.preempted_jobs_tuple), lookup_key{from.lookup_key ^ j},
+					  preempted_jobs_tuple(from.preempted_jobs_tuple), lookup_key{from.lookup_key ^ key},
 					  lookup_pr_key{from.lookup_pr_key} {
 				// if it is in the preempted jobs of previous state, update lookup key
 				if (from.job_preempted(j))
