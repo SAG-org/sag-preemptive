@@ -704,8 +704,8 @@ namespace Preemptive {
 			Time possible_preemption(Time est, Time lft, const State &s, const Job<Time> &j) const {
 				Time possible_preemption = Time_model::constants<Time>::infinity();
 				// first we check lower bounds
-				for (auto it = jobs_by_earliest_arrival.lower_bound(est + 1);
-					 it != jobs_by_earliest_arrival.upper_bound(lft); it++) {
+				for (auto it = jobs_by_earliest_arrival.lower_bound(est + Time_model::constants<Time>::epsilon());
+					 it != jobs_by_earliest_arrival.upper_bound(lft - Time_model::constants<Time>::epsilon()); it++) {
 					const Job<Time> &j_lp = *(it->second);
 
 					// continue if it is the same job
@@ -727,8 +727,8 @@ namespace Preemptive {
 					}
 				}
 				// then we check upper bounds
-				for (auto it = jobs_by_latest_arrival.lower_bound(est + 1);
-					 it != jobs_by_latest_arrival.upper_bound(lft); it++) {
+				for (auto it = jobs_by_latest_arrival.lower_bound(est + Time_model::constants<Time>::epsilon());
+					 it != jobs_by_latest_arrival.upper_bound(lft - Time_model::constants<Time>::epsilon()); it++) {
 					const Job<Time> &j_hp = *(it->second);
 
 					// continue if it is the same job
@@ -751,73 +751,6 @@ namespace Preemptive {
 				}
 
 				return possible_preemption;
-			}
-
-			// check the number of possible higher priority job releases in an interval
-			unsigned int number_of_higher_priority(Time st, Time en, const State &s, const Job<Time> &j) const {
-				unsigned int number_of_higher_priority = 0;
-				// keep index of higher priority jobs
-				std::vector<Job_index> higher_priority_jobs;
-
-				// first we check lower bounds
-				for (auto it = jobs_by_earliest_arrival.lower_bound(st + 1);
-					 it != jobs_by_earliest_arrival.upper_bound(en); it++) {
-					const Job<Time> &j_lp = *(it->second);
-
-					// continue if it is the same job
-					if (j_lp.is(j.get_id()))
-						continue;
-
-					// continue if it is already scheduled
-					if (!s.job_incomplete(index_of(j_lp)))
-						continue;
-
-					// continue if it is already preempted
-					if (s.job_preempted(index_of(j_lp)))
-						continue;
-
-					if (j_lp.higher_priority_than(j)) {
-						higher_priority_jobs.push_back(index_of(j_lp));
-						number_of_higher_priority++;
-					}
-				}
-				// then we check upper bounds
-				for (auto it = jobs_by_latest_arrival.lower_bound(st + 1);
-					 it != jobs_by_latest_arrival.upper_bound(en); it++) {
-					const Job<Time> &j_hp = *(it->second);
-
-					// continue if it is the same job
-					if (j_hp.is(j.get_id()))
-						continue;
-
-					// continue if it is already scheduled
-					if (!s.job_incomplete(index_of(j_hp)))
-						continue;
-
-					// continue if it is already preempted
-					if (s.job_preempted(index_of(j_hp)))
-						continue;
-
-					if (j_hp.higher_priority_than(j) &&
-						std::find(higher_priority_jobs.begin(), higher_priority_jobs.end(), index_of(j_hp)) ==
-						higher_priority_jobs.end()) {
-						number_of_higher_priority++;
-					}
-				}
-
-				auto preempted_jobs = s.get_preempted_jobs();
-				for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
-					const Job<Time> &jp = jobs[std::get<0>(*it)];
-
-					// check this finish time if it is in the interval
-					if (std::get<2>(*it).min() >= st && std::get<2>(*it).min() <= en) {
-						if (jp.higher_priority_than(j)) {
-							number_of_higher_priority++;
-						}
-					}
-				}
-
-				return number_of_higher_priority;
 			}
 
 
@@ -847,24 +780,6 @@ namespace Preemptive {
 					t_preempt = possible_preemption(est, lst + j.get_cost().max(), s, j);
 
 				DM("t_preempt: " << t_preempt << std::endl);
-				// now lets see if the job can be preempted
-//				if (t_preempt != Time_model::constants<Time>::infinity()) {
-//					do {
-//						auto cert_avail = s.number_of_certainly_available_cores(t_preempt);
-//						auto poss_high = number_of_higher_priority(est, t_preempt, s, j);
-//						if (cert_avail - 1 < poss_high) {
-//							// the job can be preempted
-//							lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
-//							break;
-//						} else {
-//							// the job cannot be preempted
-//							// we have to check the next possible preemption
-//							DM("Job cannot be preempted -> look into the next preemption point" << std::endl);
-//							t_preempt = possible_preemption(t_preempt, t_preempt + j.get_cost().max(), s, j);
-//							DM("Next t_preempt: " << t_preempt << std::endl);
-//						}
-//					} while (t_preempt < lst + j.get_cost().max());
-//				}
 
 				lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
 				preempt_time = t_preempt;
