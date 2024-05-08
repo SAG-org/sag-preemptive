@@ -813,7 +813,7 @@ namespace Preemptive {
 				DM("Assumed finish time: " << ftimes << std::endl);
 
 				Interval<Time> remaining(0, 0);
-				if (t_preempt < ftimes.from()) {
+				if (t_preempt <= ftimes.from()) {
 					DM("[1] Dispatching segment: " << j << std::endl);
 					remaining = {ftimes.from() - t_preempt, ftimes.upto() - t_preempt};
 					ftimes = {t_preempt, t_preempt};
