@@ -74,7 +74,7 @@ public:
 	}
 
 	bool intersects(const Interval<T> &other) const {
-		return not disjoint(other);
+		return !disjoint(other);
 	}
 
 	bool operator==(const Interval<T> &other) const {
