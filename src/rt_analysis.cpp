@@ -59,7 +59,7 @@ static unsigned int num_worker_threads = 0;
 struct Analysis_result {
 	bool schedulable;
 	bool timeout;
-	unsigned long number_of_states, number_of_edges, max_width, number_of_jobs;
+	unsigned long long number_of_states, number_of_edges, max_width, number_of_jobs;
 	double cpu_time;
 	std::string graph;
 	std::string response_times_csv;
