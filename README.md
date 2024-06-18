@@ -3,8 +3,7 @@
 </h1>
 <h4 align="center">Reachability-Based Response-Time Analysis of Preemptive Tasks Under Global Scheduling using Schedule Abstraction Graph (SAG)</h4>
 
-This repository contains the implementations of response-time analysis for **sets of preemptive jobs** scheduled *
-*globally on a system with identical cores**.
+This repository contains the implementations of response-time analysis for **sets of preemptive jobs** scheduled **globally on a system with identical cores**.
 The analysis is described in the following paper:
 
 - P. Gohari, J. Voeten, and M. Nasri “Reachability-Based Response-Time Analysis of Preemptive Tasks Under Global
