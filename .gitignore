@@ -1,8 +1,13 @@
-debug/
 *.o
 runtests
 nptest
 *~
 *.dot
 *.pdf
+
+debug/
 comparison/
+build/
+cmake-build-debug/
+.vscode/
+.idea/
