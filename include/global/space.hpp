@@ -375,7 +375,7 @@ namespace Preemptive {
 							aborted = true;
 							// create a dummy state for explanation purposes
 							auto frange = new_s.core_availability() + j.get_cost();
-							auto srange = frange - j.get_cost();
+							//auto srange = frange - j.get_cost();
 							const State &next =
 									new_state(new_s, index_of(j), predecessors_of(j),
 											  frange, frange, j.get_key());
@@ -704,13 +704,14 @@ namespace Preemptive {
 			Time possible_preemption(Time est, Time lft, const State &s, const Job<Time> &j) const {
 				Time possible_preemption = Time_model::constants<Time>::infinity();
 				// first we check lower bounds
+				int k = 0;
 				for (auto it = jobs_by_earliest_arrival.lower_bound(est + Time_model::constants<Time>::epsilon());
 					 it != jobs_by_earliest_arrival.upper_bound(lft - Time_model::constants<Time>::epsilon()); it++) {
 					const Job<Time> &j_lp = *(it->second);
 
-					// continue if it is the same job
-					if (j_lp.is(j.get_id()))
-						continue;
+					// continue if it is the same job // GN: that should already be taken care of by th test higher_priority_than(.)
+					//if (j_lp.is(j.get_id()))
+					//	continue;
 
 					// continue if it is already scheduled
 					if (!s.job_incomplete(index_of(j_lp)))
@@ -721,19 +722,23 @@ namespace Preemptive {
 						continue;
 
 					if (j_lp.higher_priority_than(j)) {
-						possible_preemption = std::min(possible_preemption, j_lp.earliest_arrival());
-						// since we are looking for the next possible preemption, we can stop here
-						break;
+						k++;
+						if (k == num_cpus || it->first < s.core_availability(k).max())
+						{
+							possible_preemption = j_lp.earliest_arrival();
+							break;
+						}
 					}
 				}
 				// then we check upper bounds
+				k = 0;
 				for (auto it = jobs_by_latest_arrival.lower_bound(est + Time_model::constants<Time>::epsilon());
 					 it != jobs_by_latest_arrival.upper_bound(lft - Time_model::constants<Time>::epsilon()); it++) {
 					const Job<Time> &j_hp = *(it->second);
 
 					// continue if it is the same job
-					if (j_hp.is(j.get_id()))
-						continue;
+					//if (j_hp.is(j.get_id()))
+					//	continue;
 
 					// continue if it is already scheduled
 					if (!s.job_incomplete(index_of(j_hp)))
@@ -744,13 +749,260 @@ namespace Preemptive {
 						continue;
 
 					if (j_hp.higher_priority_than(j)) {
-						possible_preemption = std::min(possible_preemption, j_hp.latest_arrival());
-						// since we are looking for the next possible preemption, we can stop here
-						break;
+						k++;
+						if (k == num_cpus || it->first < s.core_availability(k).max())
+						{
+							possible_preemption = std::min(possible_preemption, j_hp.latest_arrival());
+							break;
+						}
 					}
 				}
 
 				return possible_preemption;
+			}
+
+			Time calculate_twc(const State& s, const Time t_earliest, const int batch_size) const
+			{
+				// keeping track when the next 'batch_size' jobs will certainly ready in a non-decreasing ready time order
+				std::vector<Time> when(batch_size, Time_model::constants<Time>::infinity());
+
+				// check everything that was certainly released before t_earliest
+				Time t_min_rel = t_earliest;
+				for (const Job<Time>& j : jobs_by_win.lookup(t_earliest))
+				{
+					// j is not relevant if it is already scheduled or blocked
+					if (ready(s, j)) {
+						t_min_rel = std::min(t_min_rel, j.latest_arrival());
+					}
+				}
+
+				// look in the future only when we've not already
+				// found 'batch_size' ready jobs in the present.
+//				if (when[batch_size - 1] > t_earliest)
+//				{
+				int i = 0;
+				auto it = jobs_by_latest_arrival.lower_bound(t_min_rel);
+				for (int k = 0; k < batch_size; k++) {
+					for (; it != jobs_by_latest_arrival.end(); it++) {
+						const Job<Time>& j = *(it->second);
+						Time a_max = it->first;
+
+						// check if we can stop looking
+						if (when[batch_size - 1] < a_max)
+							break; // yep, nothing can lower when 'batch_size' jobs will be ready at this point
+
+						// j is not relevant if it is already scheduled or blocked
+						if (ready(s, j)) {
+							/*Time rt = latest_ready_time(s, j); //BUG: does not work with DAGs
+							if (rt < when[batch_size - 1])
+							{
+								when[batch_size - 1] = rt;
+								std::sort(when.begin(), when.end());
+							}*/
+							when[i] = a_max;
+							i++;
+							if (i >= num_cpus)
+								break;
+						}
+					}
+				}
+				//}
+
+				//if (s.has_preempted_jobs()) {
+					// check when the previous segments of each preempted job is finished
+					auto preempted_jobs = s.get_preempted_jobs();
+					for (auto p = preempted_jobs.begin(); p != preempted_jobs.end(); p++) {
+						Interval<Time> ft = std::get<2>(*p);
+						if (ft.max() < when[batch_size - 1])
+						{
+							when[batch_size - 1] = ft.max();
+							std::sort(when.begin(), when.end());
+						}
+					}
+				//}
+
+				for (int k = 0; k < batch_size - 1; k++) {
+					auto delta_k = std::max(s.core_availability(k).max(), when[k]);
+					if (delta_k < s.core_availability(k + 1).min()) {
+						return delta_k;
+					}
+				}
+				return std::max(s.core_availability(batch_size - 1).max(), when[batch_size - 1]);
+			}
+
+			Time calculate_t_high(
+				const State& s,
+				const Job<Time>& reference_job,
+				const Time t_earliest,
+				const Time upper_bound,
+				const int batch_size) const
+			{
+				auto ready_min = earliest_ready_time(s, reference_job);
+
+				// keeping track when the next 'batch_size' higher-priority jobs will certainly ready in a non-decreasing ready time order
+				std::vector<Time> when(batch_size, upper_bound);
+
+				// check everything that was certainly released before t_earliest
+				Time t_min_rel = t_earliest;
+				for (const Job<Time>& j : jobs_by_win.lookup(t_earliest))
+				{
+					// j is not relevant if it is already scheduled or blocked
+					if (ready(s, j)) {
+						t_min_rel = std::min(t_min_rel, j.latest_arrival());
+					}
+				}
+
+				// look in the future only when we've not already
+				// found 'batch_size' ready jobs in the present.
+//				if (when[batch_size - 1] > t_earliest)
+//				{
+				int i = 0;
+				for (auto it = jobs_by_latest_arrival.lower_bound(t_min_rel); it != jobs_by_latest_arrival.end(); it++) {
+					const Job<Time>& j = *(it->second);
+					Time a_max = it->first; // latest arrival time
+
+					// check if we can stop looking
+					if (when[batch_size - 1] < a_max)
+						break; // yep, nothing can lower when 'batch_size' jobs will be ready at this point
+
+					// if we passed the upper bound on the time window we must check, we return the upper bound
+					if (a_max >= upper_bound)
+						break;
+
+					// j is not relevant if it is already scheduled or blocked
+					if (ready(s, j) && j.higher_priority_than(reference_job)) {
+						/*Time rt = latest_ready_time(s, ready_min, j, reference_job); //BUG: does not work with DAGs
+						if (rt < when[batch_size - 1])
+						{
+							when[batch_size - 1] = rt;
+							std::sort(when.begin(), when.end());
+						}*/
+						when[i] = a_max;
+						i++;
+						if (i >= num_cpus)
+							break;
+					}
+				}
+				//}
+
+				//if (s.has_preempted_jobs()) {
+					// check when the previous segments of each preempted job is finished
+					auto preempted_jobs = s.get_preempted_jobs();
+					for (auto p = preempted_jobs.begin(); p != preempted_jobs.end(); p++) {
+						const Job<Time>& j = jobs[std::get<0>(*p)];
+						Interval<Time> ft = std::get<2>(*p);
+						if (j.higher_priority_than(reference_job) && ft.max() < when[batch_size - 1])
+						{
+							when[batch_size - 1] = ft.max();
+							std::sort(when.begin(), when.end());
+						}
+					}
+				//}
+
+				for (int k = 0; k < batch_size - 1; k++) {
+					if (when[k] < s.core_availability(k + 1).min())
+						return when[k];
+				}
+				return when[batch_size - 1];
+			}
+
+			unsigned int max_batch_size(const State& s, const Time t_earliest) {
+
+				Time t_min_rel = t_earliest;
+				for (const Job<Time>& j : jobs_by_win.lookup(t_earliest))
+				{
+					// j is not relevant if it is already scheduled or blocked
+					if (ready(s, j)) {
+						t_min_rel = std::min(t_min_rel, j.earliest_arrival());
+					}
+				}
+
+				std::vector<Time> when(num_cpus, Time_model::constants<Time>::infinity());
+				auto it = jobs_by_earliest_arrival.lower_bound(t_min_rel);
+				for (; it != jobs_by_earliest_arrival.end(); it++) {
+					const Job<Time>& j = *(it->second);
+					// j is not relevant if it is already scheduled or blocked
+					if (ready(s, j)) {
+						when[0] = it->first;
+						break;
+					}
+				}
+				if (it == jobs_by_earliest_arrival.end())
+					return 1;
+
+				for (int k = 1; k < num_cpus && it != jobs_by_earliest_arrival.end(); k++) {
+					for (it++; it != jobs_by_earliest_arrival.end(); it++) {
+						const Job<Time>& j = *(it->second);
+						// j is not relevant if it is already scheduled or blocked
+						if (ready(s, j)) {
+							when[k] = it->first;
+							break;
+						}
+					}
+				}
+
+				// check when the previous segments of each preempted job is finished
+				auto preempted_jobs = s.get_preempted_jobs();
+				for (auto p = preempted_jobs.begin(); p != preempted_jobs.end(); p++) {
+					const Job<Time>& j = jobs[std::get<0>(*p)];
+					Interval<Time> ft = std::get<2>(*p);
+					if (ft.min() < when[num_cpus - 1])
+					{
+						when[num_cpus - 1] = ft.min();
+						std::sort(when.begin(), when.end());
+					}
+				}
+
+				for (int k = 1; k < num_cpus; k++) {
+					if (when[k] < s.core_availability(k).max())
+						return k;
+				}
+				return num_cpus;
+			}
+
+			typedef std::tuple<Job_ref, Interval<Time>, Time> Job_start;
+			// Helper function to generate combinations
+			void combine_helper(const std::vector<Job_start>& set, int start, int k, std::vector<Job_start>& current, std::vector<std::vector<Job_start>>& result, Time threshold) {
+				// If the combination is done
+				if (k == 0) {
+					// if the earliest start time of the last job added is later than the latest start time of any job
+					// that is not in the set of selected jobs, than this combination is not legal and we do not add it to the resulting combinations
+					Interval<Time> st = std::get<1>(set[start - 1]);
+					for (int i = start; i < set.size(); ++i) {
+						Interval<Time> st_other = std::get<1>(set[i]);
+						if (st.from() > st_other.max())
+							return;
+					}
+					result.push_back(current);
+					return;
+				}
+				// Try every element to fill the current position
+				for (int i = start; i <= set.size() - k; ++i) {
+					// if the earliest start time of the next job is later than the latest start time of any job 
+					// that is not in the set of selected job, than this combination is not legal and we can stop
+					Interval<Time> st = std::get<1>(set[i]);
+					if (st.from() > threshold)
+						break;
+					current.push_back(set[i]);
+					combine_helper(set, i + 1, k - 1, current, result, threshold);
+					current.pop_back();  // backtrack
+					// we update the threshold
+					threshold = std::min(threshold, st.max());
+				}
+			}
+
+			// Main function to return combinations of k elements in a vector
+			std::vector<std::vector<Job_start>> combine(std::vector<Job_start>& jobs, int k) {
+				std::sort(jobs.begin(), jobs.end(), [](const Job_start& a, const Job_start& b) {
+					return std::get<1>(a).from() < std::get<1>(b).from();
+					});
+
+				std::vector<std::vector<Job_start>> result;
+				std::vector<Job_start> current;
+				combine_helper(jobs, 0, k, current, result, Time_model::constants<Time>::infinity());
+
+				assert(!result.empty());
+				return result;
 			}
 
 
@@ -758,7 +1010,7 @@ namespace Preemptive {
 			// NOTE: we don't use Interval<Time> here because the
 			//       Interval c'tor sorts its arguments.
 			std::pair<Time, Time> start_times(
-					const State &s, const Job<Time> &j, Time t_wc, Time &t_high_time, Time &preempt_time) const {
+					const State &s, const Job<Time> &j, Time t_wc, int batch_size, Time &t_high_time, Time &preempt_time) const {
 				auto rt = ready_times(s, j);
 				auto at = s.core_availability();
 				Time est = std::max(rt.min(), at.min());
@@ -769,10 +1021,12 @@ namespace Preemptive {
 				Time t_preempt = Time_model::constants<Time>::infinity();
 
 
-				auto t_high = next_higher_prio_job_ready(s, j, at.min());
+				auto t_high = calculate_t_high(s, j, at.min(), t_wc + 1, batch_size); //next_higher_prio_job_ready(s, j, at.min());
 				DM("t_high: " << t_high << std::endl);
 				Time lst = std::min(t_wc,
 									t_high - Time_model::constants<Time>::epsilon());
+
+				lst = std::min(lst, std::max(rt.max(), s.core_availability().max()));
 
 				// if there is a chance that the job can be dispatched,
 				// we calculate the possible preemption point
@@ -791,24 +1045,68 @@ namespace Preemptive {
 				return {est, lst};
 			}
 
-			bool dispatch(const State &s, const Job<Time> &j, Time t_wc, Interval<Time> exec_time) {
-				// check if this job has a feasible start-time interval
-				Time t_preempt;
-				Time t_high;
-				auto _st = start_times(s, j, t_wc, t_high, t_preempt);
-				if (_st.first > _st.second)
-					return false; // nope
-				// check if it can also start execution after the possible preemption point
-//				if(t_preempt < _st.second)
-//					return false; // nope
+			typedef std::tuple<Job_index, Interval<Time>, Interval<Time>> Job_fin_rem; // (0) job index, (1) finish time interval, (2) remaining execution time
+			void dispatch_batch(const State& s, const std::vector<std::tuple<Job_ref, Interval<Time>, Time>>& selected_jobs) {
+				// now we have to make a new state after dispatching the selected jobs
+				Interval<Time> start_time = { 0, 0 };
+				std::vector<Job_fin_rem> dispatched_jobs; // vector of tuple containing (0) job index, (1) finish time interval, (2) remaining execution time
+				hash_value_t batch_key = 0;
+				for (auto it = selected_jobs.begin(); it != selected_jobs.end(); it++) {
+					const Job<Time>& j = *(std::get<0>(*it));
+					Interval<Time> st = std::get<1>(*it);
+					const Time t_preempt = std::get<2>(*it);
 
-				Interval<Time> st{_st};
+					start_time = Interval<Time>{ std::max(start_time.from(), st.from()), std::max(start_time.upto(), st.upto()) };
+					Interval<Time> ftimes = st + j.get_cost();
+					Interval<Time> remaining(0, 0);
+					if (t_preempt <= ftimes.from()) {
+						DM("[1] Dispatching segment: " << j << std::endl);
+						remaining = { ftimes.from() - t_preempt, ftimes.upto() - t_preempt };
+						ftimes = { t_preempt, t_preempt };
+					}
+					else if (ftimes.from() < t_preempt && t_preempt < ftimes.until()) {
+						DM("[2] Dispatching segment: " << j << std::endl);
+						remaining = { 0, ftimes.upto() - t_preempt };
+						// since job possibly finished at time ftimes.from(),
+						// if it is preempted the finish time of the previous segment is t_preempt
+						ftimes = { t_preempt, t_preempt };
+						// update the finish time
+						update_finish_times(j, { ftimes.from(), t_preempt });
+					}
+					else {
+						// dispatching the whole job
+						DM("[3] Dispatching: " << j << std::endl);
+					}
 
-				// yep, job j is a feasible successor in state s
+
+					dispatched_jobs.push_back(std::make_tuple(index_of(j), ftimes, remaining));
+					
+					batch_key = batch_key ^ j.get_key();
+				}
+
+				// expand the graph, merging if possible
+				const State& next = be_naive ?
+					new_state(s, dispatched_jobs, start_time, batch_key) :
+					new_or_merged_state(s, dispatched_jobs, start_time, batch_key);
+
+				// make sure we didn't skip any jobs
+				check_for_deadline_misses(s, next);
+
+#ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
+				// create a vector of references to the selected jobs
+				std::vector<Job_ref> selected_jobs_ref;
+				for (auto it = selected_jobs.begin(); it != selected_jobs.end(); it++) {
+					selected_jobs_ref.push_back(it->first);
+				}
+				edges.emplace_back(selected_jobs_ref, &s, &next, finish_times);
+#endif
+				count_edge();
+			}
+
+			bool dispatch(const State &s, const Job<Time> &j, Interval<Time> st, Time t_preempt) {
 
 				// compute range of possible finish times
-				Interval<Time> ftimes(0, 0);
-				ftimes = st + exec_time;
+				Interval<Time> ftimes = st + j.get_cost();
 
 				DM("Assumed finish time: " << ftimes << std::endl);
 
@@ -874,45 +1172,38 @@ namespace Preemptive {
 
 				DM("----" << std::endl);
 
-				// (0) define the window of interest
+				
 
+				// (0) define the window of interest
 				// earliest time a core is possibly available
 				auto t_min = s.core_availability().min();
-				// latest time some unfinished job is certainly ready
-				auto t_job = next_job_ready(s, t_min);
-				// latest time some core is certainly available
-				auto t_core = s.core_availability().max();
+				// calculate how many jobs can run in parallel without influencing each other's dispatch time
+				int batch_size = max_batch_size(s, t_min);
 				// latest time by which a work-conserving scheduler
 				// certainly schedules some job
-				Time t_wc;
-				if (s.has_preempted_jobs()) {
-					t_wc = std::max(t_core, t_job);
-					// check the first time that the previous segments of a preempted job is completed
-					Time min_finish_time = Time_model::constants<Time>::infinity();
-					auto preempted_jobs = s.get_preempted_jobs();
-					for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
-						const Job<Time> &j = jobs[std::get<0>(*it)];
-						Interval<Time> ft{0, 0};
-						ft = std::get<2>(*it);
-						min_finish_time = std::min(min_finish_time, ft.max());
-					}
-					min_finish_time = std::max(min_finish_time, t_core);
-					t_wc = std::min(t_wc, min_finish_time);
-				} else
-					t_wc = std::max(t_core, t_job);
+				Time t_wc = calculate_twc(s, t_min, batch_size);
 
 				DM("Checking state: " << s << std::endl);
 				DM("t_min: " << t_min << std::endl
-							 << "t_job: " << t_job << std::endl
-							 << "t_core: " << t_core << std::endl
 							 << "t_wc: " << t_wc << std::endl);
 
+				// make a set of pointer to the eligible jobs
+				// (0) job reference, (1) start time interval, (2) t_preempt
+				std::vector<std::tuple<Job_ref, Interval<Time>, Time>> eligible_jobs;
 				DM("==== [1] ====" << std::endl);
 				// (1) first check jobs that may be already pending
 				for (const Job<Time> &j: jobs_by_win.lookup(t_min))
-					if (j.earliest_arrival() <= t_min && ready(s, j) && !s.job_preempted(index_of(j)))
-						found_one |= dispatch(s, j, t_wc, j.get_cost());
-
+					if (j.earliest_arrival() <= t_min && ready(s, j) && !s.job_preempted(index_of(j))) {
+						// check if this job has a feasible start-time interval
+						Time t_high, t_preempt;
+						auto _st = start_times(s, j, t_wc, batch_size, t_high, t_preempt);
+						if (_st.first > _st.second)
+							continue; // nope
+						else {
+							eligible_jobs.push_back(std::make_tuple(&j, _st, t_preempt));
+						}
+					}
+						
 				DM("==== [2] ====" << std::endl);
 				// (2) check jobs that are released only later in the interval
 				for (auto it = jobs_by_earliest_arrival.upper_bound(t_min);
@@ -929,14 +1220,21 @@ namespace Preemptive {
 						continue;
 
 					// if job is previously preempted, we skip it here and we check it later
-					if (s.job_preempted(index_of(j)))
-						continue;
+					//if (s.job_preempted(index_of(j))) //GN: aleady checked by ready(s,j)
+					//	continue;
 
 					// Since this job is released in the future, it better
 					// be incomplete...
 					assert(unfinished(s, j));
 
-					found_one |= dispatch(s, j, t_wc, j.get_cost());
+					// check if this job has a feasible start-time interval
+					Time t_high, t_preempt;
+					auto _st = start_times(s, j, t_wc, batch_size, t_high, t_preempt);
+					if (_st.first > _st.second)
+						continue; // nope
+					else {
+						eligible_jobs.push_back(std::make_tuple(&j, _st, t_preempt));
+					}
 				}
 
 				DM("==== [3] ====" << std::endl);
@@ -944,7 +1242,45 @@ namespace Preemptive {
 				auto preempted_jobs = s.get_preempted_jobs();
 				for (auto it = preempted_jobs.begin(); it != preempted_jobs.end(); it++) {
 					const Job<Time> &j = jobs[std::get<0>(*it)];
-					found_one |= dispatch(s, j, t_wc, std::get<1>(*it));
+					// check if this job has a feasible start-time interval
+					Time t_high, t_preempt;
+					auto _st = start_times(s, j, t_wc, batch_size, t_high, t_preempt);
+					if (_st.first > _st.second)
+						continue; // nope
+					else {
+						eligible_jobs.push_back(std::make_tuple(&j, _st, t_preempt));
+					}
+				}
+
+				batch_size = std::min(batch_size, (int)eligible_jobs.size());
+				if (batch_size > 1) {
+					// now we have to find all legal combinations of the eligible jobs
+					auto combinations = combine(eligible_jobs, batch_size);
+
+					// print the combinations
+					for (auto comb : combinations) {
+						//						std::cout << "Combination: {";
+						//						for (auto it = comb.begin(); it != comb.end(); it++) {
+						//							const Job<Time> &j = **it;
+						//							std::cout << j.get_id() << " ";
+						//						}
+						//						std::cout << "} ";
+						dispatch_batch(s, comb);
+						found_one = true;
+					}
+					//					std::cout << "--------------------" << std::endl;
+					assert(found_one);
+				}
+				if (batch_size == 1) {
+					// now we have a list of eligible jobs
+					// we have to dispatch them
+					for (auto it = eligible_jobs.begin(); it != eligible_jobs.end(); it++) {
+						// get the job
+						const Job<Time>& j = *(std::get<0>(*it));
+
+						//						std::cout << "Regular dispatch: " << j.get_id() << std::endl;
+						found_one |= dispatch(s, j, std::get<1>(*it), std::get<2>(*it));
+					}
 				}
 
 				// check for a dead end

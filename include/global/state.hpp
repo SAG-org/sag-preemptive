@@ -29,6 +29,107 @@ namespace Preemptive {
 				assert(core_avail.size() > 0);
 			}
 
+			// transition: new state by scheduling a batch of job in an existing state,
+			//             by replacing a given running job.
+			Schedule_state(
+				const Schedule_state& from,
+				std::vector<std::tuple<Job_index, Interval<Time>, Interval<Time>>> dispatched_jobs, // (0) job index, (1) finish time, (2) remaining exec time
+				Interval<Time> start_times, 
+				hash_value_t key)
+				: scheduled_jobs{ from.scheduled_jobs }
+				, lookup_key {from.lookup_key^ key}
+				, num_dispatched_segments{ from.num_dispatched_segments }
+			{
+				int n_cores = from.core_avail.size();
+				auto est = start_times.min();
+				auto lst = start_times.max();
+				//				auto eft = finish_times.min();
+				//				auto lft = finish_times.max();
+
+				DM("est: " << est << std::endl
+					<< "lst: " << lst << std::endl
+					<< "eft: " << eft << std::endl
+					<< "lft: " << lft << std::endl);
+
+				// make a list of all the jobs that execute to completion
+				std::vector<Job_index> js;
+				js.reserve(dispatched_jobs.size());
+				for (auto it : dispatched_jobs) {
+					Job_index j = std::get<0>(it);
+					Interval<Time> remaining = std::get<2>(it);
+					if (remaining.max() == 0) // this job executes to completion
+						js.push_back(j);
+					else { // this jobs is being preempted before completion
+						num_dispatched_segments++;
+						Interval<Time> finish_times = std::get<1>(it);
+						// if it is already in the preempted jobs, update its remaining time
+						bool updated_j = false;
+						for (auto it = from.preempted_jobs_tuple.begin(); it != from.preempted_jobs_tuple.end(); it++) {
+							if (std::get<0>(*it) < j)
+								preempted_jobs_tuple.emplace_back(*it);
+							else if (std::get<0>(*it) == j) {
+								preempted_jobs_tuple.emplace_back(j, remaining, finish_times);
+								updated_j = true;
+							}
+							else if (std::get<0>(*it) > j && !updated_j) {
+								preempted_jobs_tuple.emplace_back(j, remaining, finish_times);
+								preempted_jobs_tuple.emplace_back(*it);
+								updated_j = true;
+							}
+							else {
+								preempted_jobs_tuple.emplace_back(*it);
+							}
+
+						}
+						// add the remaining segment of the job to the preempted jobs
+						if (!updated_j)
+							preempted_jobs_tuple.emplace_back(j, remaining, finish_times);
+					}
+				}
+				std::sort(js.begin(), js.end(), [](Job_index a, Job_index b) {return a > b; });
+				
+				num_jobs_scheduled = from.num_jobs_scheduled + js.size();
+				for (Job_index j : js) {
+					// if it is in the preempted jobs, remove it
+					std::erase_if(preempted_jobs_tuple,
+						[&](const std::tuple<Job_index, Interval<Time>, Interval<Time> >& rj) {
+							return std::get<0>(rj) == j;
+						});
+					// add it to the list of completed jobs
+					scheduled_jobs.add(j);
+				}
+
+				// update the cores availability intervals
+				std::vector<Time> ca, pa;
+
+				ca.reserve(n_cores);
+				pa.reserve(n_cores);
+
+				for (int i = 0; i < dispatched_jobs.size(); i++) {
+					Interval<Time> ft = std::get<1>(dispatched_jobs[i]);
+					pa.push_back(std::max(est, ft.min()));
+					ca.push_back(std::max(est, ft.max()));
+				}
+
+				// note, we must skip first elements in from.core_avail
+				for (int i = dispatched_jobs.size(); i < from.core_avail.size(); i++) {
+					pa.push_back(std::max(est, from.core_avail[i].min()));
+					ca.push_back(std::max(est, from.core_avail[i].max()));
+				}
+
+				// sort in non-decreasing order
+				std::sort(pa.begin(), pa.end());
+				std::sort(ca.begin(), ca.end());
+
+				for (int i = 0; i < from.core_avail.size(); i++) {
+					DM(i << " -> " << pa[i] << ":" << ca[i] << std::endl);
+					core_avail.emplace_back(pa[i], ca[i]);
+				}
+
+				assert(core_avail.size() > 0);
+				DM("*** new state: constructed " << *this << std::endl);
+			}
+
 			// transition: new state by scheduling a job in an existing state,
 			//             by replacing a given running job.
 			Schedule_state(
@@ -422,9 +523,10 @@ namespace Preemptive {
 				return num_dispatched_segments;
 			}
 
-			Interval<Time> core_availability() const {
+			Interval<Time> core_availability(unsigned int k=0) const {
 				assert(core_avail.size() > 0);
-				return core_avail[0];
+				assert(core_avail.size() > k);
+				return core_avail[k];
 			}
 
 			unsigned int number_of_certainly_available_cores(Time t) const {
@@ -536,11 +638,11 @@ namespace Preemptive {
 
 		private:
 
-			const unsigned int num_jobs_scheduled;
-			const unsigned int num_dispatched_segments;
+			unsigned int num_jobs_scheduled;
+			unsigned int num_dispatched_segments;
 
 			// set of jobs that have been dispatched (may still be running)
-			const Index_set scheduled_jobs;
+			Index_set scheduled_jobs;
 
 			// set of remaining segments of jobs that are preempted
 			// <1> job index -- <2> remaining execution time -- <3> finish time
