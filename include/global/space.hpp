@@ -782,7 +782,7 @@ namespace Preemptive {
 //				{
 				int i = 0;
 				auto it = jobs_by_latest_arrival.lower_bound(t_min_rel);
-				for (int k = 0; k < batch_size; k++) {
+				//for (int k = 0; k < batch_size; k++) {
 					for (; it != jobs_by_latest_arrival.end(); it++) {
 						const Job<Time>& j = *(it->second);
 						Time a_max = it->first;
@@ -801,11 +801,11 @@ namespace Preemptive {
 							}*/
 							when[i] = a_max;
 							i++;
-							if (i >= num_cpus)
+							if (i >= batch_size )
 								break;
 						}
 					}
-				}
+				//}
 				//}
 
 				//if (s.has_preempted_jobs()) {
@@ -879,7 +879,7 @@ namespace Preemptive {
 						}*/
 						when[i] = a_max;
 						i++;
-						if (i >= num_cpus)
+						if (i >= batch_size)
 							break;
 					}
 				}
@@ -927,8 +927,8 @@ namespace Preemptive {
 						break;
 					}
 				}
-				if (it == jobs_by_earliest_arrival.end())
-					return 1;
+				//if (it == jobs_by_earliest_arrival.end())
+				//	return 1;
 
 				for (int k = 1; k < num_cpus && it != jobs_by_earliest_arrival.end(); k++) {
 					for (it++; it != jobs_by_earliest_arrival.end(); it++) {
