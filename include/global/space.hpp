@@ -1174,7 +1174,7 @@ namespace Preemptive {
 				if (t_preempt != Time_model::constants<Time>::infinity()) {
 					do {
 						auto poss_high = number_of_higher_priority(est, t_preempt, s, j);
-						if (poss_high == num_cpus || t_preempt < s.core_availability(poss_high).max()) {
+						if (poss_high >= num_cpus || t_preempt < s.core_availability(poss_high).max()) {
 							lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
 							break;
 						} else {
