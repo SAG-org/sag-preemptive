@@ -280,6 +280,8 @@ namespace Preemptive {
 			// NOTE: we don't use Interval<Time> here because the Interval sorts its arguments.
 			typedef std::vector<std::pair<Time, Time>> Response_times;
 
+			typedef std::tuple<Job_ref, Interval<Time>, Time> Job_start;
+
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 			std::deque<Edge> edges;
 #endif
@@ -1039,13 +1041,14 @@ namespace Preemptive {
 				return num_cpus;
 			}
 
-			typedef std::tuple<Job_ref, Interval<Time>, Time> Job_start;
+
 			// Helper function to generate combinations
 			void combine_helper(const std::vector<Job_start>& set, int start, int k, std::vector<Job_start>& current, std::vector<std::vector<Job_start>>& result, Time threshold) {
 				// If the combination is done
 				if (k == 0) {
 					// if the earliest start time of the last job added is later than the latest start time of any job
 					// that is not in the set of selected jobs, than this combination is not legal and we do not add it to the resulting combinations
+					assert(start > 0);
 					Interval<Time> st = std::get<1>(set[start - 1]);
 					for (int i = start; i < set.size(); ++i) {
 						Interval<Time> st_other = std::get<1>(set[i]);
@@ -1057,7 +1060,7 @@ namespace Preemptive {
 				}
 				// Try every element to fill the current position
 				for (int i = start; i <= set.size() - k; ++i) {
-					// if the earliest start time of the next job is later than the latest start time of any job 
+					// if the earliest start time of the next job is later than the latest start time of any job
 					// that is not in the set of selected job, than this combination is not legal and we can stop
 					Interval<Time> st = std::get<1>(set[i]);
 					if (st.from() > threshold)
@@ -1071,14 +1074,23 @@ namespace Preemptive {
 			}
 
 			// Main function to return combinations of k elements in a vector
-			std::vector<std::vector<Job_start>> combine(std::vector<Job_start>& jobs, int k) {
-				std::sort(jobs.begin(), jobs.end(), [](const Job_start& a, const Job_start& b) {
+			std::vector<std::vector<Job_start>> combine(std::vector<Job_start> &selected_jobs, int k) {
+				std::sort(selected_jobs.begin(), selected_jobs.end(), [](const Job_start& a, const Job_start& b) {
 					return std::get<1>(a).from() < std::get<1>(b).from();
-					});
+				});
+
+				// find the maximum size of the combinations that can be generated C(jobs.size(), k)
+				int max_size = 1;
+				for (int i = 0; i < k; i++)
+					max_size *= selected_jobs.size() - i;
+				for (int i = 1; i <= k; i++)
+					max_size /= i;
 
 				std::vector<std::vector<Job_start>> result;
+				result.reserve(max_size);
 				std::vector<Job_start> current;
-				combine_helper(jobs, 0, k, current, result, Time_model::constants<Time>::infinity());
+				current.reserve(k);
+				combine_helper(selected_jobs, 0, k, current, result, Time_model::constants<Time>::infinity());
 
 				assert(!result.empty());
 				return result;
@@ -1296,7 +1308,7 @@ namespace Preemptive {
 
 				// make a set of pointer to the eligible jobs
 				// (0) job reference, (1) start time interval, (2) t_preempt
-				std::vector<std::tuple<Job_ref, Interval<Time>, Time>> eligible_jobs;
+				std::vector<Job_start> eligible_jobs;
 				DM("==== [1] ====" << std::endl);
 				// (1) first check jobs that may be already pending
 				for (const Job<Time> &j: jobs_by_win.lookup(t_min))
@@ -1307,10 +1319,10 @@ namespace Preemptive {
 						if (_st.first > _st.second)
 							continue; // nope
 						else {
-							eligible_jobs.push_back(std::make_tuple(&j, _st, t_preempt));
+							eligible_jobs.emplace_back(&j, _st, t_preempt);
 						}
 					}
-						
+
 				DM("==== [2] ====" << std::endl);
 				// (2) check jobs that are released only later in the interval
 				for (auto it = jobs_by_earliest_arrival.upper_bound(t_min);
@@ -1340,7 +1352,7 @@ namespace Preemptive {
 					if (_st.first > _st.second)
 						continue; // nope
 					else {
-						eligible_jobs.push_back(std::make_tuple(&j, _st, t_preempt));
+						eligible_jobs.emplace_back(&j, _st, t_preempt);
 					}
 				}
 
@@ -1355,7 +1367,7 @@ namespace Preemptive {
 					if (_st.first > _st.second)
 						continue; // nope
 					else {
-						eligible_jobs.push_back(std::make_tuple(&j, _st, t_preempt));
+						eligible_jobs.emplace_back(&j, _st, t_preempt);
 					}
 				}
 
