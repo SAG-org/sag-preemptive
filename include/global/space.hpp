@@ -116,16 +116,16 @@ namespace Preemptive {
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 
 			struct Edge {
-				const Job<Time>* scheduled;
+				const std::vector<const Job<Time>*> scheduled;
 				const State* source;
 				const State* target;
-				const Interval<Time> finish_range;
-				const Interval<Time> start_range;
+				const std::vector<Interval<Time>> finish_range;
+				const std::vector<Interval<Time>> start_range;
 				const bool segment;
-				const Interval<Time> segment_remaining;
+				const std::vector<Interval<Time>> segment_remaining;
 
-				Edge(const Job<Time>* s, const State* src, const State* tgt, const Interval<Time>& sr,
-					 const Interval<Time>& fr, const bool seg = false, const Interval<Time>& seg_rem = Interval<Time>{0, 0})
+				Edge(const std::vector<const Job<Time>*> s, const State* src, const State* tgt, const std::vector<Interval<Time>>& sr,
+					 const std::vector<Interval<Time>>& fr, const bool seg = false, const std::vector<Interval<Time>>& seg_rem = {Interval<Time>{0, 0}})
 				: scheduled(s)
 				, source(src)
 				, target(tgt)
@@ -138,28 +138,60 @@ namespace Preemptive {
 
 				bool deadline_miss_possible() const
 				{
-					return scheduled->exceeds_deadline(finish_range.upto());
+					bool deadline_miss = false;
+					for(int i = 0; i < scheduled.size(); i++) {
+						deadline_miss = deadline_miss || scheduled[i]->exceeds_deadline(finish_range[i].upto());
+					}
+					return deadline_miss;
 				}
 
-				Time earliest_finish_time() const
+				std::string earliest_finish_time() const
 				{
-					return finish_range.from();
+					std::string finish_time;
+					for(int i = 0; i < scheduled.size(); i++) {
+						finish_time += std::to_string(finish_range[i].from());
+						if(i != scheduled.size() - 1) {
+							finish_time += ", ";
+						}
+					}
+					return finish_time;
 				}
 
-				Time latest_finish_time() const
+				std::string latest_finish_time() const
 				{
-					return finish_range.upto();
+					std::string finish_time;
+					for(int i = 0; i < scheduled.size(); i++) {
+						finish_time += std::to_string(finish_range[i].from());
+						if(i != scheduled.size() - 1) {
+							finish_time += ", ";
+						}
+					}
+					return finish_time;
 				}
 
-				Time earliest_start_time() const
+				std::string earliest_start_time() const
 				{
 //					return finish_range.from() - scheduled->least_cost();
-					return start_range.from();
+					std::string start_time;
+					for(int i = 0; i < scheduled.size(); i++) {
+						start_time += std::to_string(start_range[i].from());
+						if(i != scheduled.size() - 1) {
+							start_time += ", ";
+						}
+					}
+					return start_time;
 				}
 
-				Time latest_start_time() const
+				std::string latest_start_time() const
 				{
-					return start_range.upto();
+					std::string start_time;
+					for(int i = 0; i < scheduled.size(); i++) {
+						start_time += std::to_string(start_range[i].upto());
+						if(i != scheduled.size() - 1) {
+							start_time += ", ";
+						}
+					}
+					return start_time;
 				}
 
 				bool is_segment() const
@@ -167,9 +199,50 @@ namespace Preemptive {
 					return segment;
 				}
 
-				Interval<Time> get_segment_remaining() const
+				std::string get_segment_remaining() const
 				{
-					return segment_remaining;
+					std::string seg_time;
+					for(int i = 0; i < scheduled.size(); i++) {
+						seg_time += std::to_string(segment_remaining[i].upto());
+						if(i != scheduled.size() - 1) {
+							seg_time += ", ";
+						}
+					}
+					return seg_time;
+				}
+
+				std::string deadline() const
+				{
+//					return scheduled.back()->get_deadline();
+					std::string deadline;
+					for(int i = 0; i < scheduled.size(); i++) {
+						deadline += std::to_string(scheduled[i]->get_deadline());
+						if(i != scheduled.size() - 1) {
+							deadline += ", ";
+						}
+					}
+					return deadline;
+				}
+
+				unsigned long task_id() const
+				{
+					return scheduled.back()->get_task_id();
+				}
+
+				unsigned long job_id() const
+				{
+					return scheduled.back()->get_job_id();
+				}
+
+				std::string get_label() const {
+					std::string label;
+					for(int i = 0; i < scheduled.size(); i++) {
+						label += "T" +std::to_string(scheduled[i]->get_task_id()) + " J" + std::to_string(scheduled[i]->get_job_id());
+						if(i != scheduled.size() - 1) {
+							label += ", ";
+						}
+					}
+					return label;
 				}
 
 			};
@@ -382,7 +455,13 @@ namespace Preemptive {
 							// update response times
 							update_finish_times(j, frange);
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
-							edges.emplace_back(&j, &new_s, &next, srange, frange);
+							std::vector<Job_ref> selected_jobs;
+							selected_jobs.push_back(&j);
+							std::vector<Interval<Time>> finish_times;
+							std::vector<Interval<Time>> start_times;
+							finish_times.push_back(frange);
+							start_times.push_back(new_s.core_availability());
+							edges.emplace_back(selected_jobs, &new_s, &next,start_times, finish_times, false);
 #endif
 							count_edge();
 							break;
@@ -1095,10 +1174,19 @@ namespace Preemptive {
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 				// create a vector of references to the selected jobs
 				std::vector<Job_ref> selected_jobs_ref;
+				std::vector<Interval<Time>> selected_jobs_finish;
+				std::vector<Interval<Time>> selected_jobs_start;
+				std::vector<Interval<Time>> selected_jobs_remaining;
 				for (auto it = selected_jobs.begin(); it != selected_jobs.end(); it++) {
-					selected_jobs_ref.push_back(it->first);
+					const Job<Time>& j = *(std::get<0>(*it));
+					selected_jobs_ref.push_back(&j);
+					selected_jobs_start.push_back(std::get<1>(*it));
 				}
-				edges.emplace_back(selected_jobs_ref, &s, &next, finish_times);
+				for(auto it = dispatched_jobs.begin(); it != dispatched_jobs.end(); it++) {
+					selected_jobs_finish.push_back(std::get<1>(*it));
+					selected_jobs_remaining.push_back(std::get<2>(*it));
+				}
+				edges.emplace_back(selected_jobs_ref, &s, &next, selected_jobs_start, selected_jobs_finish, false, selected_jobs_remaining);
 #endif
 				count_edge();
 			}
@@ -1142,7 +1230,18 @@ namespace Preemptive {
 					// make sure we didn't skip any jobs
 //                    check_for_deadline_misses(s, next);
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
-					edges.emplace_back(&j, &s, &next,st , ftimes, true, remaining);
+					std::vector<Job_ref> selected_jobs;
+					selected_jobs.push_back(&j);
+					std::vector<Interval<Time>> finish_times;
+					std::vector<Interval<Time>> start_times;
+					std::vector<Interval<Time>> remaining_times;
+					finish_times.push_back(ftimes);
+					start_times.push_back(st);
+					remaining_times.push_back(remaining);
+
+					edges.emplace_back(selected_jobs, &s, &next, start_times, finish_times, true, remaining_times);
+
+//					edges.emplace_back(&j, &s, &next,st , ftimes, true, remaining);
 #endif
 				} else {
 					// update finish-time estimates
@@ -1157,7 +1256,15 @@ namespace Preemptive {
 					// make sure we didn't skip any jobs
 //                    check_for_deadline_misses(s, next);
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
-					edges.emplace_back(&j, &s, &next, st, ftimes, false);
+					std::vector<Job_ref> selected_jobs;
+					selected_jobs.push_back(&j);
+					std::vector<Interval<Time>> finish_times;
+					std::vector<Interval<Time>> start_times;
+					finish_times.push_back(ftimes);
+					start_times.push_back(st);
+
+					edges.emplace_back(selected_jobs, &s, &next, start_times, finish_times, false);
+//					edges.emplace_back(&j, &s, &next, st, ftimes, false);
 #endif
 				}
 
@@ -1481,11 +1588,10 @@ namespace Preemptive {
 
 #ifdef CONFIG_COLLECT_SCHEDULE_GRAPH
 			friend std::ostream& operator<< (std::ostream& out,
-											 const State_space<Time>& space)
+			                                 const State_space<Time>& space)
 			{
 					std::map<const Schedule_state<Time>*, unsigned int> state_id;
 					unsigned int i = 0;
-					std::ostream temp(nullptr);
 					out << "digraph {" << std::endl;
 #ifdef CONFIG_PARALLEL
 					for (const Split_states& states : space.get_states()) {
@@ -1494,8 +1600,6 @@ namespace Preemptive {
 					for (const auto& front : space.get_states()) {
 						for (const Schedule_state<Time>& s : front) {
 #endif
-							if(s.removed())
-								continue;
 							state_id[&s] = i++;
 							out << "\tS" << state_id[&s]
 								<< "[label=\"S" << state_id[&s] << ": ";
@@ -1505,27 +1609,22 @@ namespace Preemptive {
 					}
 					for (const auto& e : space.get_edges()) {
 						out << "\tS" << state_id[e.source]
-							<< " -> "
-							<< "S" << state_id[e.target]
-							<< "[label=\""
-							<< "T" << e.scheduled->get_task_id()
-							<< " J" << e.scheduled->get_job_id()
-							<< "\\nDL=" << e.scheduled->get_deadline()
-							<< "\\nES=" << e.earliest_start_time()
-							 << "\\nLS=" << e.latest_start_time()
-							<< "\\nEF=" << e.earliest_finish_time()
-							<< "\\nLF=" << e.latest_finish_time();
-							if (e.is_segment())
-								out << "\\nRE: " << e.get_segment_remaining() ;
-							out << "\"";
+						    << " -> "
+						    << "S" << state_id[e.target]
+						    << "[label=\""
+						    << e.get_label()
+						    << "\\nDL=" << e.deadline()
+						    << "\\nES=" << e.earliest_start_time()
+ 						    << "\\nLS=" << e.latest_start_time()
+						    << "\\nEF=" << e.earliest_finish_time()
+						    << "\\nLF=" << e.latest_finish_time()
+						    << "\"";
 						if (e.deadline_miss_possible()) {
 							out << ",color=Red,fontcolor=Red";
 						}
-						if (e.is_segment())
-							out << ",style=dashed";
 						out << ",fontsize=8" << "]"
-							<< ";"
-							<< std::endl;
+						    << ";"
+						    << std::endl;
 						if (e.deadline_miss_possible()) {
 							out << "S" << state_id[e.target]
 								<< "[color=Red];"
