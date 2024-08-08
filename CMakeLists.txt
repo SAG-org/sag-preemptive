@@ -8,7 +8,7 @@ include_directories(lib/include)
 option(PARALLEL_RUN "Enable parallel run" OFF)
 option(USE_TBB_MALLOC "Use the Intel TBB scalable memory allocator" OFF)
 option(USE_JE_MALLOC "Use the Facebook jemalloc scalable memory allocator" OFF)
-option(COLLECT_SCHEDULE_GRAPHS "Enable the collection of schedule graphs (disables parallel)" OFF)
+option(COLLECT_SCHEDULE_GRAPHS "Enable the collection of schedule graphs (disables parallel)" ON)
 option(DEBUG "Enable debugging" OFF)
 
 if (PARALLEL_RUN AND COLLECT_SCHEDULE_GRAPHS)
@@ -51,7 +51,7 @@ add_executable(rt_analysis ${ANALYSIS_SOURCES})
 
 target_link_libraries(rt_analysis ${CORE_LIBS})
 
-target_compile_features(rt_analysis PUBLIC cxx_std_14)
+target_compile_features(rt_analysis PUBLIC cxx_std_20)
 
 if (MSVC)
     target_compile_options(rt_analysis PUBLIC "/Zc:__cplusplus")
