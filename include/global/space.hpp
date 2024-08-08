@@ -203,7 +203,7 @@ namespace Preemptive {
 				{
 					std::string seg_time;
 					for(int i = 0; i < scheduled.size(); i++) {
-						seg_time += std::to_string(segment_remaining[i].upto());
+						seg_time += "[" + std::to_string(segment_remaining[i].from()) + ", " + std::to_string(segment_remaining[i].upto()) + "]";
 						if(i != scheduled.size() - 1) {
 							seg_time += ", ";
 						}
@@ -1630,6 +1630,7 @@ namespace Preemptive {
  						    << "\\nLS=" << e.latest_start_time()
 						    << "\\nEF=" << e.earliest_finish_time()
 						    << "\\nLF=" << e.latest_finish_time()
+							<< "\\nRM=" << e.get_segment_remaining()
 						    << "\"";
 						if (e.deadline_miss_possible()) {
 							out << ",color=Red,fontcolor=Red";
