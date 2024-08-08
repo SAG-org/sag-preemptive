@@ -35,10 +35,11 @@ namespace Preemptive {
 				const Schedule_state& from,
 				std::vector<std::tuple<Job_index, Interval<Time>, Interval<Time>>> dispatched_jobs, // (0) job index, (1) finish time, (2) remaining exec time
 				Interval<Time> start_times, 
-				hash_value_t key)
+				hash_value_t key, hash_value_t pr_key)
 				: scheduled_jobs{ from.scheduled_jobs }
 				, lookup_key {from.lookup_key^ key}
 				, num_dispatched_segments{ from.num_dispatched_segments }
+				, lookup_pr_key{from.lookup_pr_key^ pr_key}
 			{
 				int n_cores = from.core_avail.size();
 				auto est = start_times.min();
