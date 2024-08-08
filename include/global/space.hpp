@@ -161,7 +161,7 @@ namespace Preemptive {
 				{
 					std::string finish_time;
 					for(int i = 0; i < scheduled.size(); i++) {
-						finish_time += std::to_string(finish_range[i].from());
+						finish_time += std::to_string(finish_range[i].upto());
 						if(i != scheduled.size() - 1) {
 							finish_time += ", ";
 						}
