@@ -1200,7 +1200,7 @@ namespace Preemptive {
 			}
 
 			typedef std::tuple<Job_index, Interval<Time>, Interval<Time>> Job_fin_rem; // (0) job index, (1) finish time interval, (2) remaining execution time
-			void dispatch_batch(const State& s, const std::vector<std::tuple<Job_ref, Interval<Time>, Time>>& selected_jobs) {
+			void dispatch_batch(const State& s, const std::vector<Job_start>& selected_jobs) {
 				// now we have to make a new state after dispatching the selected jobs
 				Interval<Time> start_time = { 0, 0 };
 				std::vector<Job_fin_rem> dispatched_jobs; // vector of tuple containing (0) job index, (1) finish time interval, (2) remaining execution time
@@ -1209,9 +1209,14 @@ namespace Preemptive {
 					const Job<Time>& j = *(std::get<0>(*it));
 					Interval<Time> st = std::get<1>(*it);
 					const Time t_preempt = std::get<2>(*it);
-
+					Interval<Time> cost =  j.get_cost();
 					start_time = Interval<Time>{ std::max(start_time.from(), st.from()), std::max(start_time.upto(), st.upto()) };
-					Interval<Time> ftimes = st + j.get_cost();
+					// check if it is preempted before or not
+					if(s.job_preempted(index_of(j))) {
+						// if it is preempted, we have to use its remaining execution time
+						cost = s.get_remaining_time(index_of(j));
+					}
+					Interval<Time> ftimes = st + cost;
 					Interval<Time> remaining(0, 0);
 					if (t_preempt <= ftimes.from()) {
 						DM("[1] Dispatching segment: " << j << std::endl);
@@ -1230,6 +1235,7 @@ namespace Preemptive {
 					else {
 						// dispatching the whole job
 						DM("[3] Dispatching: " << j << std::endl);
+						update_finish_times(j, ftimes);
 					}
 
 
