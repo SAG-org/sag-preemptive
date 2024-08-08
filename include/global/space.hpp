@@ -1254,7 +1254,13 @@ namespace Preemptive {
 			bool dispatch(const State &s, const Job<Time> &j, Interval<Time> st, Time t_preempt) {
 
 				// compute range of possible finish times
+				// by default we assume it is not preempted before
 				Interval<Time> ftimes = st + j.get_cost();
+				// check if it is preempted
+				if(s.job_preempted(index_of(j))) {
+					// if it is preempted, we have to use its remaining execution time
+					ftimes = st + s.get_remaining_time(index_of(j));
+				}
 
 				DM("Assumed finish time: " << ftimes << std::endl);
 
