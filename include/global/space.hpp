@@ -1187,17 +1187,15 @@ namespace Preemptive {
 				Interval<Time> start_time = { 0, 0 };
 				std::vector<Job_fin_rem> dispatched_jobs; // vector of tuple containing (0) job index, (1) finish time interval, (2) remaining execution time
 				hash_value_t batch_key = 0;
+				hash_value_t batch_pr_key = 0;
+
 				for (auto it = selected_jobs.begin(); it != selected_jobs.end(); it++) {
 					const Job<Time>& j = *(std::get<0>(*it));
 					Interval<Time> st = std::get<1>(*it);
 					const Time t_preempt = std::get<2>(*it);
-					Interval<Time> cost =  j.get_cost();
+					Interval<Time> cost =  s.job_preempted(index_of(j)) ? s.get_remaining_time(index_of(j)) : j.get_cost();
 					start_time = Interval<Time>{ std::max(start_time.from(), st.from()), std::max(start_time.upto(), st.upto()) };
-					// check if it is preempted before or not
-					if(s.job_preempted(index_of(j))) {
-						// if it is preempted, we have to use its remaining execution time
-						cost = s.get_remaining_time(index_of(j));
-					}
+
 					Interval<Time> ftimes = st + cost;
 					Interval<Time> remaining(0, 0);
 					if (t_preempt <= ftimes.from()) {
