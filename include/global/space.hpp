@@ -1107,17 +1107,9 @@ namespace Preemptive {
 					return std::get<1>(a).from() < std::get<1>(b).from();
 				});
 
-				// find the maximum size of the combinations that can be generated C(jobs.size(), k)
-				int max_size = 1;
-				for (int i = 0; i < k; i++)
-					max_size *= selected_jobs.size() - i;
-				for (int i = 1; i <= k; i++)
-					max_size /= i;
-
 				std::vector<std::vector<Job_start>> result;
-				result.reserve(max_size);
 				std::vector<Job_start> current;
-				current.reserve(k);
+
 				combine_helper(selected_jobs, 0, k, current, result, Time_model::constants<Time>::infinity());
 
 				assert(!result.empty());
@@ -1152,24 +1144,7 @@ namespace Preemptive {
 				if (est <= lst)
 					t_preempt = possible_preemption(est, lst + j.get_cost().max(), s, j);
 
-//				if (t_preempt != Time_model::constants<Time>::infinity()) {
-//					do {
-//						auto poss_high = number_of_higher_priority(est, t_preempt, s, j);
-//						if (poss_high >= num_cpus || t_preempt < s.core_availability(poss_high).max()) {
-//							lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
-//							break;
-//						} else {
-//							// the job cannot be preempted.
-//							// we have to check the next possible preemption
-//							DM("Job cannot be preempted -> look into the next preemption point" << std::endl);
-//							t_preempt = possible_preemption(t_preempt, t_preempt + j.get_cost().max(), s, j);
-//							DM("Next t_preempt: " << t_preempt << std::endl);
-//						}
-//					} while (t_preempt < lst + j.get_cost().max());
-//				}
-
 				DM("t_preempt: " << t_preempt << std::endl);
-				std::cout <<"Job" << j.get_id() << " est: " << est << " lst: " << lst << " t_preempt: " << t_preempt << std::endl;
 
 				lst = std::min(lst, t_preempt - Time_model::constants<Time>::epsilon());
 				preempt_time = t_preempt;
