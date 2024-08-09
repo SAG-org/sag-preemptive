@@ -795,19 +795,22 @@ namespace Preemptive {
 //					if( est < j_t.earliest_arrival())
 //						continue;
 
-					// continue if it is already preempted
+
 					if (s.job_preempted(index_of(j_t))) {
 						// we have to check the finish time of its previous segment
 						// to see if it can block the current job
 						Interval<Time> ft = s.get_segment_finish_time(index_of(j_t));
-						if (ft.max() < est)
-							continue;
-					}
-
-					if (j_t.higher_priority_than(j)) {
-						k_min++;
-						if(j_t.latest_arrival() < est)
-							k_max++;
+						if (ft.min() < est && j_t.higher_priority_than(j)) {
+							k_min++;
+							if (ft.max() < est)
+								k_max++;
+						}
+					} else {
+						if (j_t.higher_priority_than(j)) {
+							k_min++;
+							if (j_t.latest_arrival() < est)
+								k_max++;
+						}
 					}
 
 //					if (k >= num_cpus || est < s.core_availability(k).max()) {
