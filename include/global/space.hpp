@@ -788,16 +788,16 @@ namespace Preemptive {
 					// continue if it is already scheduled
 					if (!s.job_incomplete(index_of(j_t)))
 						continue;
-
-					if (s.job_preempted(index_of(j_t))) {
-						// we have to check the finish time of its previous segment
-						// to see if it can block the current job
-						Interval<Time> ft = s.get_segment_finish_time(index_of(j_t));
-						if (ft.min() < x && j_t.higher_priority_than(j)) {
-							k++;
+					if (j_t.higher_priority_than(j)) {
+						if (s.job_preempted(index_of(j_t))) {
+							// we have to check the finish time of its previous segment
+							// to see if it can block the current job
+							Interval<Time> ft = s.get_segment_finish_time(index_of(j_t));
+							if (ft.min() <= x) {
+								k++;
+							}
 						}
-					} else {
-						if (j_t.higher_priority_than(j)) {
+						else {
 							k++;
 						}
 					}
@@ -1260,13 +1260,12 @@ namespace Preemptive {
 				} else {
 					// dispatching the whole job
 					DM("[3] Dispatching: " << j << std::endl);
+					// update finish-time estimates
+					update_finish_times(j, ftimes);
 				}
 
 				// if we have a leftover, the job is preempted, and we dispatch the first segment
 				if (remaining.until() > 0) {
-					// update finish-time
-					update_finish_times(j, ftimes);
-
 					// expand the graph, merging if possible
 					const State &next = be_naive ?
 										new_state(s, index_of(j), predecessors_of(j),
@@ -1290,9 +1289,6 @@ namespace Preemptive {
 //					edges.emplace_back(&j, &s, &next,st , ftimes, true, remaining);
 #endif
 				} else {
-					// update finish-time estimates
-					update_finish_times(j, ftimes);
-
 					// expand the graph, merging if possible
 					const State &next = be_naive ?
 										new_state(s, index_of(j), predecessors_of(j),
