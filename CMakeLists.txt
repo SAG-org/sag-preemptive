@@ -51,7 +51,7 @@ add_executable(rt_analysis ${ANALYSIS_SOURCES})
 
 target_link_libraries(rt_analysis ${CORE_LIBS})
 
-target_compile_features(rt_analysis PUBLIC cxx_std_14)
+target_compile_features(rt_analysis PUBLIC cxx_std_20)
 
 if (MSVC)
     target_compile_options(rt_analysis PUBLIC "/Zc:__cplusplus")

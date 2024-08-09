@@ -35,10 +35,12 @@ namespace Preemptive {
 				const Schedule_state& from,
 				std::vector<std::tuple<Job_index, Interval<Time>, Interval<Time>>> dispatched_jobs, // (0) job index, (1) finish time, (2) remaining exec time
 				Interval<Time> start_times, 
-				hash_value_t key)
+				hash_value_t key, hash_value_t pr_key)
 				: scheduled_jobs{ from.scheduled_jobs }
 				, lookup_key {from.lookup_key^ key}
 				, num_dispatched_segments{ from.num_dispatched_segments }
+				, preempted_jobs_tuple(from.preempted_jobs_tuple)
+				, lookup_pr_key{from.lookup_pr_key^ pr_key}
 			{
 				int n_cores = from.core_avail.size();
 				auto est = start_times.min();
@@ -59,31 +61,36 @@ namespace Preemptive {
 					Interval<Time> remaining = std::get<2>(it);
 					if (remaining.max() == 0) // this job executes to completion
 						js.push_back(j);
-					else { // this jobs is being preempted before completion
+					else { // these jobs are being preempted before completion
 						num_dispatched_segments++;
 						Interval<Time> finish_times = std::get<1>(it);
 						// if it is already in the preempted jobs, update its remaining time
 						bool updated_j = false;
-						for (auto it = from.preempted_jobs_tuple.begin(); it != from.preempted_jobs_tuple.end(); it++) {
+						// create an empty list of preempted jobs
+						std::vector<std::tuple<Job_index, Interval<Time>, Interval<Time>>> preempted_jobs_tuple_temp;
+						for (auto it = preempted_jobs_tuple.begin(); it != preempted_jobs_tuple.end(); it++) {
 							if (std::get<0>(*it) < j)
-								preempted_jobs_tuple.emplace_back(*it);
+								preempted_jobs_tuple_temp.emplace_back(*it);
 							else if (std::get<0>(*it) == j) {
-								preempted_jobs_tuple.emplace_back(j, remaining, finish_times);
+								preempted_jobs_tuple_temp.emplace_back(j, remaining, finish_times);
 								updated_j = true;
 							}
 							else if (std::get<0>(*it) > j && !updated_j) {
-								preempted_jobs_tuple.emplace_back(j, remaining, finish_times);
-								preempted_jobs_tuple.emplace_back(*it);
+								preempted_jobs_tuple_temp.emplace_back(j, remaining, finish_times);
+								preempted_jobs_tuple_temp.emplace_back(*it);
 								updated_j = true;
 							}
 							else {
-								preempted_jobs_tuple.emplace_back(*it);
+								preempted_jobs_tuple_temp.emplace_back(*it);
 							}
 
 						}
 						// add the remaining segment of the job to the preempted jobs
 						if (!updated_j)
-							preempted_jobs_tuple.emplace_back(j, remaining, finish_times);
+							preempted_jobs_tuple_temp.emplace_back(j, remaining, finish_times);
+
+						// now we have to replace the old list with the new one
+						preempted_jobs_tuple.swap(preempted_jobs_tuple_temp);
 					}
 				}
 				std::sort(js.begin(), js.end(), [](Job_index a, Job_index b) {return a > b; });
@@ -625,6 +632,17 @@ namespace Preemptive {
 					out << "T" << jobs[rj.first].get_task_id()
 						<< "J" << jobs[rj.first].get_job_id() << ":"
 						<< rj.second.min() << "-" << rj.second.max();
+					first = false;
+				}
+				out << "}";
+				out << "\\nPreempted: {";
+				first = true;
+				for (const auto &rj: preempted_jobs_tuple) {
+					if (!first)
+						out << ", ";
+					out << "T" << jobs[std::get<0>(rj)].get_task_id()
+						<< "J" << jobs[std::get<0>(rj)].get_job_id() << ":"
+						<< std::get<1>(rj).min() << "-" << std::get<1>(rj).max();
 					first = false;
 				}
 				out << "}";
