@@ -635,6 +635,17 @@ namespace Preemptive {
 					first = false;
 				}
 				out << "}";
+				out << "\\nPreempted: {";
+				first = true;
+				for (const auto &rj: preempted_jobs_tuple) {
+					if (!first)
+						out << ", ";
+					out << "T" << jobs[std::get<0>(rj)].get_task_id()
+						<< "J" << jobs[std::get<0>(rj)].get_job_id() << ":"
+						<< std::get<1>(rj).min() << "-" << std::get<1>(rj).max();
+					first = false;
+				}
+				out << "}";
 			}
 
 			bool removed() const {
