@@ -784,10 +784,10 @@ namespace Preemptive {
 			// find the next lower or upper bound that a higher priority job after time est can possibly release
 			Time possible_preemption(Time est, Time lft, const State &s, const Job<Time> &j) const {
 				Time possible_preemption = Time_model::constants<Time>::infinity();
-				int k = 0;
+				int k_min = 0, k_max = 0;
 
 				// first, let's see how many higher priority jobs already exist in EST
-				for (const Job<Time>& j_t : jobs_by_win.lookup(est + Time_model::constants<Time>::epsilon())) {
+				for (const Job<Time>& j_t : jobs_by_win.lookup(est)) {
 					// continue if it is already scheduled
 					if (!s.job_incomplete(index_of(j_t)))
 						continue;
@@ -805,7 +805,9 @@ namespace Preemptive {
 					}
 
 					if (j_t.higher_priority_than(j)) {
-						k++;
+						k_min++;
+						if(j_t.latest_arrival() < est)
+							k_max++;
 					}
 
 //					if (k >= num_cpus || est < s.core_availability(k).max()) {
@@ -831,8 +833,8 @@ namespace Preemptive {
 						continue;
 
 					if (j_lp.higher_priority_than(j)) {
-						k++;
-						if (k >= num_cpus || it->first < s.core_availability(k).max())
+						k_min++;
+						if (k_min >= num_cpus || it->first < s.core_availability(k_min).max())
 						{
 							possible_preemption = j_lp.earliest_arrival();
 							break;
@@ -840,7 +842,6 @@ namespace Preemptive {
 					}
 				}
 				// then we check upper bounds
-				k = 0;
 				for (auto it = jobs_by_latest_arrival.lower_bound(est + Time_model::constants<Time>::epsilon());
 					 it != jobs_by_latest_arrival.upper_bound(lft - Time_model::constants<Time>::epsilon()); it++) {
 					const Job<Time> &j_hp = *(it->second);
@@ -858,8 +859,8 @@ namespace Preemptive {
 						continue;
 
 					if (j_hp.higher_priority_than(j)) {
-						k++;
-						if (k >= num_cpus || it->first < s.core_availability(k).max())
+						k_max++;
+						if (k_max >= num_cpus || it->first < s.core_availability(k_max).max())
 						{
 							possible_preemption = std::min(possible_preemption, j_hp.latest_arrival());
 							break;
