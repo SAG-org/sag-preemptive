@@ -784,9 +784,36 @@ namespace Preemptive {
 			// find the next lower or upper bound that a higher priority job after time est can possibly release
 			Time possible_preemption(Time est, Time lft, const State &s, const Job<Time> &j) const {
 				Time possible_preemption = Time_model::constants<Time>::infinity();
-				// first we check lower bounds
 				int k = 0;
-				bool first = true;
+
+				// first, let's see how many higher priority jobs already exist in EST
+				for (const Job<Time>& j_t : jobs_by_win.lookup(est + Time_model::constants<Time>::epsilon())) {
+					// continue if it is already scheduled
+					if (!s.job_incomplete(index_of(j_t)))
+						continue;
+
+//					if( est < j_t.earliest_arrival())
+//						continue;
+
+					// continue if it is already preempted
+					if (s.job_preempted(index_of(j_t))) {
+						// we have to check the finish time of its previous segment
+						// to see if it can block the current job
+						Interval<Time> ft = s.get_segment_finish_time(index_of(j_t));
+						if (ft.max() < est)
+							continue;
+					}
+
+					if (j_t.higher_priority_than(j)) {
+						k++;
+					}
+
+//					if (k >= num_cpus || est < s.core_availability(k).max()) {
+//						return est;
+//					}
+				}
+
+				// then we check lower bounds
 				for (auto it = jobs_by_earliest_arrival.lower_bound(est + Time_model::constants<Time>::epsilon());
 					 it != jobs_by_earliest_arrival.upper_bound(lft - Time_model::constants<Time>::epsilon()); it++) {
 					const Job<Time> &j_lp = *(it->second);
@@ -804,31 +831,8 @@ namespace Preemptive {
 						continue;
 
 					if (j_lp.higher_priority_than(j)) {
-						if (first) {
-							// let's count how many higher priority jobs can possibly release in this point
-							for (const Job<Time>& j_t : jobs_by_win.lookup(j_lp.earliest_arrival())) {
-								// continue if it is already scheduled
-								if (!s.job_incomplete(index_of(j_t)))
-									continue;
-
-								// continue if it is already preempted
-								if (s.job_preempted(index_of(j_t)))
-									continue;
-
-								if (j_t.higher_priority_than(j)) {
-									k++;
-								}
-
-								if (k == num_cpus || it->first < s.core_availability(k).max())
-								{
-									possible_preemption = j_lp.earliest_arrival();
-									break;
-								}
-							}
-						} else {
-							k++;
-						}
-						if (k == num_cpus || it->first < s.core_availability(k).max())
+						k++;
+						if (k >= num_cpus || it->first < s.core_availability(k).max())
 						{
 							possible_preemption = j_lp.earliest_arrival();
 							break;
@@ -837,7 +841,6 @@ namespace Preemptive {
 				}
 				// then we check upper bounds
 				k = 0;
-				first = true;
 				for (auto it = jobs_by_latest_arrival.lower_bound(est + Time_model::constants<Time>::epsilon());
 					 it != jobs_by_latest_arrival.upper_bound(lft - Time_model::constants<Time>::epsilon()); it++) {
 					const Job<Time> &j_hp = *(it->second);
@@ -856,7 +859,7 @@ namespace Preemptive {
 
 					if (j_hp.higher_priority_than(j)) {
 						k++;
-						if (k == num_cpus || it->first < s.core_availability(k).max())
+						if (k >= num_cpus || it->first < s.core_availability(k).max())
 						{
 							possible_preemption = std::min(possible_preemption, j_hp.latest_arrival());
 							break;
