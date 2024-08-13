@@ -1190,17 +1190,25 @@ namespace Preemptive {
 
 
 					dispatched_jobs.push_back(std::make_tuple(index_of(j), ftimes, remaining));
-					if (s.job_preempted(index_of(j)) && remaining.max() == 0) {
-						// the segment completed, so we have to remove it from the preempted jobs key
-						batch_pr_key ^= j.get_key();
-						// we have to also add it to the key of the completed jobs
-						batch_key ^= j.get_key();
-					}else if(!s.job_preempted(index_of(j)) && remaining.max() > 0)
-						// this is a new preempted job, so we have to add it to the preempted jobs key
-						batch_pr_key ^= j.get_key();
-					else
-						// a normal dispatched job without preemption
-						batch_key ^= j.get_key();
+					
+					if (s.job_preempted(index_of(j))) {
+						// a segment that preempted before
+						if (remaining.max() == 0) {
+							// the segment completed, so we have to remove it from the preempted jobs key
+							batch_pr_key ^= j.get_key();
+							// we have to also add it to the key of the completed jobs
+							batch_key ^= j.get_key();
+						}
+					}
+					else {
+						// a new segment
+						if (remaining.max() > 0)
+							// this is a new preempted job, so we have to add it to the preempted jobs key
+							batch_pr_key ^= j.get_key();
+						else
+							// a normal dispatched job without preemption
+							batch_key ^= j.get_key();
+					}
 				}
 
 				// expand the graph, merging if possible

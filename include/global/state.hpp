@@ -29,17 +29,17 @@ namespace Preemptive {
 				assert(core_avail.size() > 0);
 			}
 
+			typedef std::tuple<Job_index, Interval<Time>, Interval<Time>> Dispatched_job;
 			// transition: new state by scheduling a batch of job in an existing state,
 			//             by replacing a given running job.
 			Schedule_state(
 				const Schedule_state& from,
-				std::vector<std::tuple<Job_index, Interval<Time>, Interval<Time>>> dispatched_jobs, // (0) job index, (1) finish time, (2) remaining exec time
+				std::vector<Dispatched_job> dispatched_jobs, // (0) job index, (1) finish time, (2) remaining exec time
 				Interval<Time> start_times, 
 				hash_value_t key, hash_value_t pr_key)
 				: scheduled_jobs{ from.scheduled_jobs }
 				, lookup_key {from.lookup_key^ key}
 				, num_dispatched_segments{ from.num_dispatched_segments }
-				, preempted_jobs_tuple(from.preempted_jobs_tuple)
 				, lookup_pr_key{from.lookup_pr_key^ pr_key}
 			{
 				int n_cores = from.core_avail.size();
@@ -53,57 +53,66 @@ namespace Preemptive {
 					<< "eft: " << eft << std::endl
 					<< "lft: " << lft << std::endl);
 
+				std::sort(dispatched_jobs.begin(), dispatched_jobs.end(), [](Dispatched_job a, Dispatched_job b) {return std::get<0>(a) < std::get<0>(b); });
+
 				// make a list of all the jobs that execute to completion
 				std::vector<Job_index> js;
 				js.reserve(dispatched_jobs.size());
+				// and make an ordered list of preempted jobs
+				preempted_jobs_tuple.reserve(from.preempted_jobs_tuple.size() + dispatched_jobs.size());
+				auto preempted_j = from.preempted_jobs_tuple.begin();
+
 				for (auto it : dispatched_jobs) {
 					Job_index j = std::get<0>(it);
 					Interval<Time> remaining = std::get<2>(it);
-					if (remaining.max() == 0) // this job executes to completion
+					if (remaining.max() == 0) { // this job executes to completion
+						// add it to the list of completed jobs
 						js.push_back(j);
+						// remove it from the list of preempted jobs if it had been preempted before completing
+						for (; preempted_j != from.preempted_jobs_tuple.end(); preempted_j++) {
+							Job_index preempt_id = std::get<0>(*preempted_j);
+							if (preempt_id < j)
+								preempted_jobs_tuple.emplace_back(*preempted_j);
+							else if (preempt_id > j) {
+								break;
+							}
+						}
+					}
 					else { // these jobs are being preempted before completion
 						num_dispatched_segments++;
 						Interval<Time> finish_times = std::get<1>(it);
 						// if it is already in the preempted jobs, update its remaining time
 						bool updated_j = false;
-						// create an empty list of preempted jobs
-						std::vector<std::tuple<Job_index, Interval<Time>, Interval<Time>>> preempted_jobs_tuple_temp;
-						for (auto it = preempted_jobs_tuple.begin(); it != preempted_jobs_tuple.end(); it++) {
-							if (std::get<0>(*it) < j)
-								preempted_jobs_tuple_temp.emplace_back(*it);
-							else if (std::get<0>(*it) == j) {
-								preempted_jobs_tuple_temp.emplace_back(j, remaining, finish_times);
+						// update the list of preempted jobs
+						for (; preempted_j != from.preempted_jobs_tuple.end(); preempted_j++) {
+							Job_index preempt_id = std::get<0>(*preempted_j);
+							if (preempt_id < j)
+								preempted_jobs_tuple.emplace_back(*preempted_j);
+							else if (preempt_id == j) {
+								preempted_jobs_tuple.emplace_back(j, remaining, finish_times);
 								updated_j = true;
+								preempted_j++;
+								break;
 							}
-							else if (std::get<0>(*it) > j && !updated_j) {
-								preempted_jobs_tuple_temp.emplace_back(j, remaining, finish_times);
-								preempted_jobs_tuple_temp.emplace_back(*it);
+							else { // preempt_id > j
+								preempted_jobs_tuple.emplace_back(j, remaining, finish_times);
 								updated_j = true;
+								break;
 							}
-							else {
-								preempted_jobs_tuple_temp.emplace_back(*it);
-							}
-
 						}
 						// add the remaining segment of the job to the preempted jobs
 						if (!updated_j)
-							preempted_jobs_tuple_temp.emplace_back(j, remaining, finish_times);
-
-						// now we have to replace the old list with the new one
-						preempted_jobs_tuple.swap(preempted_jobs_tuple_temp);
+							preempted_jobs_tuple.emplace_back(j, remaining, finish_times);						
 					}
 				}
-				std::sort(js.begin(), js.end(), [](Job_index a, Job_index b) {return a > b; });
-				
+				// we finish copying all the reminaing preempted jobs
+				for (; preempted_j != from.preempted_jobs_tuple.end(); preempted_j++)
+					preempted_jobs_tuple.emplace_back(*preempted_j);
+
 				num_jobs_scheduled = from.num_jobs_scheduled + js.size();
-				for (Job_index j : js) {
-					// if it is in the preempted jobs, remove it
-					std::erase_if(preempted_jobs_tuple,
-						[&](const std::tuple<Job_index, Interval<Time>, Interval<Time> >& rj) {
-							return std::get<0>(rj) == j;
-						});
+				for (int i = js.size() - 1; i >= 0; i--) {
 					// add it to the list of completed jobs
-					scheduled_jobs.add(j);
+					scheduled_jobs.add(js[i]);
 				}
 
 				// update the cores availability intervals
