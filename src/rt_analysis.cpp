@@ -260,7 +260,7 @@ static void print_header() {
 int main(int argc, char **argv) {
 	auto parser = optparse::OptionParser();
 
-	parser.description("Exact NP Schedulability Tester");
+	parser.description("Response-time analysis for preemptive job sets");
 	parser.usage("usage: %prog [OPTIONS]... [JOB SET FILES]...");
 
 	parser.add_option("-t", "--time").dest("time_model")
