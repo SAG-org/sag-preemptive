@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.8.0)
 
-project("Preemptive response time analysis" VERSION 1.0.0 LANGUAGES CXX)
+project("Preemptive response time analysis" VERSION 1.1.0 LANGUAGES CXX)
 
 include_directories(include)
 include_directories(lib/include)
